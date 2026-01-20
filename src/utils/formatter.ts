@@ -6,7 +6,6 @@ import remarkRehype from 'remark-rehype';
 import rehypeKatex from 'rehype-katex';
 import rehypeStringify from 'rehype-stringify';
 import strip from 'strip-markdown';
-import TurndownService from 'turndown';
 
 import remarkStringify from 'remark-stringify';
 
@@ -15,51 +14,51 @@ import remarkStringify from 'remark-stringify';
  * Includes Math/LaTeX rendering.
  */
 export async function markdownToRichHtml(markdown: string): Promise<string> {
-    const file = await unified()
-        .use(remarkParse)
-        .use(remarkGfm)
-        .use(remarkMath)
-        .use(remarkRehype)
-        .use(rehypeKatex)
-        .use(rehypeStringify)
-        .process(markdown);
+  const file = await unified()
+    .use(remarkParse)
+    .use(remarkGfm)
+    .use(remarkMath)
+    .use(remarkRehype)
+    .use(rehypeKatex)
+    .use(rehypeStringify)
+    .process(markdown);
 
-    return String(file);
+  return String(file);
 }
 
 /**
  * Harmonizes Markdown (Standardizes syntax, headers, list markers, etc.)
  */
 export async function harmonizeMarkdown(markdown: string): Promise<string> {
-    const file = await unified()
-        .use(remarkParse)
-        .use(remarkGfm)
-        .use(remarkMath)
-        .use(remarkStringify, {
-            bullet: '-',
-            fence: '`',
-            fences: true,
-            incrementListMarker: true,
-            listItemIndent: 'one',
-        })
-        .process(markdown);
+  const file = await unified()
+    .use(remarkParse)
+    .use(remarkGfm)
+    .use(remarkMath)
+    .use(remarkStringify, {
+      bullet: '-',
+      fence: '`',
+      fences: true,
+      incrementListMarker: true,
+      listItemIndent: 'one',
+    })
+    .process(markdown);
 
-    return String(file);
+  return String(file);
 }
 
 /**
  * Strips Markdown symbols for clean Plain Text.
  */
 export async function markdownToPlainText(markdown: string): Promise<string> {
-    const file = await unified()
-        .use(remarkParse)
-        .use(remarkGfm)
-        .use(remarkMath)
-        .use(strip)
-        .use(remarkStringify)
-        .process(markdown);
+  const file = await unified()
+    .use(remarkParse)
+    .use(remarkGfm)
+    .use(remarkMath)
+    .use(strip)
+    .use(remarkStringify)
+    .process(markdown);
 
-    return String(file);
+  return String(file);
 }
 
 /**
@@ -69,8 +68,8 @@ export async function markdownToPlainText(markdown: string): Promise<string> {
  * and copies it to the clipboard.
  */
 export function generateBookmarklet(): string {
-    // Minified bookmarklet that loads TurndownService dynamically
-    const code = `(function(){
+  // Minified bookmarklet that loads TurndownService dynamically
+  const code = `(function(){
   var overlay = document.createElement('div');
   overlay.id = 'md-clipper-overlay';
   overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:999999;display:flex;align-items:center;justify-content:center;';
@@ -151,5 +150,5 @@ export function generateBookmarklet(): string {
   }
 })();`;
 
-    return `javascript:${encodeURIComponent(code)}`;
+  return `javascript:${encodeURIComponent(code)}`;
 }

@@ -198,47 +198,17 @@ export function exportAsXML(content: string, filename: string = 'document'): voi
 }
 
 /**
- * Export as RTF (.rtf) with proper Unicode escaping
- */
-/**
- * Export as RTF (.rtf) with robust Unicode and structure handling
+ * Export as RTF (.rtf) with robust structure and formatting
  */
 export function exportAsRTF(content: string, filename: string = 'document'): void {
-    const rtfHeader = "{\\rtf1\\ansi\\ansicpg1252\\deff0\\nouicompat{\\fonttbl{\\f0\\fnil\\fcharset0 Arial;}}\n{\\colortbl ;\\red0\\green0\\blue0;}\n\\viewkind4\\uc1 \n\\f0\\fs24 ";
+    const rtfHeader = "{\\rtf1\\ansi\\ansicpg1252\\deff0\\nouicompat\n" +
+        "{\\fonttbl{\\f0\\fnil\\fcharset0 Calibri;}{\\f1\\fnil\\fcharset0 Consolas;}{\\f2\\fnil\\fcharset0 Cambria Math;}}\n" +
+        "{\\colortbl ;\\red0\\green0\\blue0;\\red102\\green102\\blue102;\\red240\\green240\\blue240;\\red79\\green70\\blue229;\\red229\\green231\\blue235;\\red204\\green204\\blue204;}\n" +
+        "\\viewkind4\\uc1\\f0\\fs24 ";
 
-    // Formatting pass
-    let processed = content
-        .replace(/^# (.*)$/gm, "\\b\\fs40 $1\\b0\\par\n")
-        .replace(/^## (.*)$/gm, "\\b\\fs32 $1\\b0\\par\n")
-        .replace(/\*\*\*(.*)\*\*\*/g, "\\b\\i $1\\i0\\b0")
-        .replace(/\*\*(.*)\*\*/g, "\\b $1\\b0")
-        .replace(/\*(.*)\*/g, "\\i $1\\i0")
-        .split('\n')
-        .map(line => line.trim() === "" ? "\\par" : line + "\\par")
-        .join("\n");
+    const rtfContent = parseMarkdownToRTF(content);
+    const finalRtf = rtfHeader + rtfContent + "}";
 
-    // Cleaning pass (Aggressively remove MD markers)
-    processed = processed
-        .replace(/^[\s\t]*>+\s?/gm, '')
-        .replace(/[*#_`|]/g, '');
-
-    // Unicode escaping for RTF
-    const encodeRTF = (str: string) => {
-        let result = "";
-        for (let i = 0; i < str.length; i++) {
-            const charCode = str.charCodeAt(i);
-            if (charCode > 127) {
-                result += `\\u${charCode}?`;
-            } else if (str[i] === '\\' || str[i] === '{' || str[i] === '}') {
-                result += '\\' + str[i];
-            } else {
-                result += str[i];
-            }
-        }
-        return result;
-    };
-
-    const finalRtf = rtfHeader + encodeRTF(processed) + "}";
     const blob = new Blob([finalRtf], { type: 'application/rtf' });
     saveAs(blob, filename.endsWith('.rtf') ? filename : `${filename}.rtf`);
 }
@@ -568,4 +538,182 @@ export async function copyRichText(htmlContent: string): Promise<boolean> {
         console.error('Failed to copy:', err);
         try { await navigator.clipboard.writeText(htmlContent.replace(/<[^>]*>/g, '')); return true; } catch { return false; }
     }
+}
+
+/**
+ * RTF Helper: Encode string with Unicode support and RTF escaping
+ */
+function encodeRTFText(str: string): string {
+    let res = "";
+    for (let i = 0; i < str.length; i++) {
+        const charCode = str.charCodeAt(i);
+        if (charCode > 127) {
+            res += `\\u${charCode}?`;
+        } else if (str[i] === '\\' || str[i] === '{' || str[i] === '}') {
+            res += '\\' + str[i];
+        } else {
+            res += str[i];
+        }
+    }
+    return res;
+}
+
+/**
+ * RTF Helper: Parse inline markdown to RTF codes
+ */
+function parseInlineToRTF(text: string): string {
+    const regex = /(\$\$.*?\$\$|\$.*?\$|\*\*\*[^*]+\*\*\*|\*\*[^*]+\*\*|\*[^*]+\*|___[^_]+___|__[^_]+__|_[^_]+_|`[^`]+`|<br\s*\/?>)/g;
+    const parts = text.split(regex);
+    let result = "";
+
+    for (const part of parts) {
+        if (!part) continue;
+        if (part.startsWith('$$') && part.endsWith('$$')) {
+            result += `{\\i\\cf4\\f2 ${encodeRTFText(part.slice(2, -2))}}`;
+        } else if (part.startsWith('$') && part.endsWith('$')) {
+            result += `{\\i\\cf4\\f2 ${encodeRTFText(part.slice(1, -1))}}`;
+        } else if (part.startsWith('***') && part.endsWith('***')) {
+            result += `{\\b\\i ${encodeRTFText(part.slice(3, -3))}}`;
+        } else if (part.startsWith('___') && part.endsWith('___')) {
+            result += `{\\b\\i ${encodeRTFText(part.slice(3, -3))}}`;
+        } else if (part.startsWith('**') && part.endsWith('**')) {
+            result += `{\\b ${encodeRTFText(part.slice(2, -2))}}`;
+        } else if (part.startsWith('__') && part.endsWith('__')) {
+            result += `{\\b ${encodeRTFText(part.slice(2, -2))}}`;
+        } else if (part.startsWith('*') && part.endsWith('*')) {
+            result += `{\\i ${encodeRTFText(part.slice(1, -1))}}`;
+        } else if (part.startsWith('_') && part.endsWith('_')) {
+            result += `{\\i ${encodeRTFText(part.slice(1, -1))}}`;
+        } else if (part.startsWith('`') && part.endsWith('`')) {
+            result += `{\\f1\\highlight3 ${encodeRTFText(part.slice(1, -1))}}`;
+        } else if (part.match(/<br\s*\/?>/i)) {
+            result += "\\line ";
+        } else {
+            result += encodeRTFText(part);
+        }
+    }
+    return result;
+}
+
+/**
+ * RTF Helper: Main parser for Markdown to RTF conversion
+ */
+function parseMarkdownToRTF(content: string): string {
+    const lines = content.split('\n');
+    let rtf = "";
+    let i = 0;
+    let inCodeBlock = false;
+    let codeBlockContent: string[] = [];
+
+    while (i < lines.length) {
+        const line = lines[i];
+        const trimmed = line.trim();
+
+        // Horizontal Rule
+        if (/^(\*\*\*|---|__{3,})\s*$/.test(trimmed)) {
+            rtf += "\\pard\\sb200\\sa200\\brdrb\\brdrs\\brdrw10\\brdrcf6\\par\n";
+            i++; continue;
+        }
+
+        // Code Block
+        if (trimmed.startsWith('```')) {
+            if (inCodeBlock) {
+                rtf += "{\\pard\\f1\\fs20\\highlight3 " + encodeRTFText(codeBlockContent.join("\\line\n")) + "\\par}\n";
+                codeBlockContent = []; inCodeBlock = false;
+            } else { inCodeBlock = true; }
+            i++; continue;
+        }
+        if (inCodeBlock) { codeBlockContent.push(line); i++; continue; }
+
+        // Setext Headings
+        if (i + 1 < lines.length) {
+            const nextLine = lines[i + 1].trim();
+            if (/^={3,}\s*$/.test(nextLine)) {
+                rtf += "{\\pard\\b\\fs40\\sb400\\sa200 " + parseInlineToRTF(trimmed) + "\\par}\n";
+                i += 2; continue;
+            } else if (/^-{3,}\s*$/.test(nextLine)) {
+                rtf += "{\\pard\\b\\fs32\\sb300\\sa150 " + parseInlineToRTF(trimmed) + "\\par}\n";
+                i += 2; continue;
+            }
+        }
+
+        // Tables
+        if (trimmed.includes('|') && trimmed.startsWith('|')) {
+            const tableLines: string[] = [];
+            while (i < lines.length && lines[i].trim().includes('|')) {
+                tableLines.push(lines[i]);
+                i++;
+            }
+            if (tableLines.length >= 2) {
+                const { headers, rows } = parseMarkdownTable(tableLines.join('\n'));
+                if (headers.length > 0) {
+                    const cellWidth = 3000;
+                    // Header Row
+                    rtf += "\\trowd\\trgaph108\\trleft-108";
+                    for (let j = 0; j < headers.length; j++) {
+                        rtf += `\\clcbpat5\\clbrdrt\\brdrs\\brdrw10\\clbrdrl\\brdrs\\brdrw10\\clbrdrb\\brdrs\\brdrw10\\clbrdrr\\brdrs\\brdrw10\\cellx${(j + 1) * cellWidth}`;
+                    }
+                    rtf += "\\pard\\intbl\\ql ";
+                    for (const h of headers) {
+                        rtf += "{\\b " + parseInlineToRTF(h) + "}\\cell ";
+                    }
+                    rtf += "\\row\n";
+
+                    // Data Rows
+                    for (const row of rows) {
+                        rtf += "\\trowd\\trgaph108\\trleft-108";
+                        for (let j = 0; j < row.length; j++) {
+                            rtf += `\\clbrdrt\\brdrs\\brdrw10\\clbrdrl\\brdrs\\brdrw10\\clbrdrb\\brdrs\\brdrw10\\clbrdrr\\brdrs\\brdrw10\\cellx${(j + 1) * cellWidth}`;
+                        }
+                        rtf += "\\pard\\intbl\\ql ";
+                        for (const cell of row) {
+                            rtf += parseInlineToRTF(cell) + "\\cell ";
+                        }
+                        rtf += "\\row\n";
+                    }
+                    rtf += "\\pard\\sa200\\par\n";
+                }
+            }
+            continue;
+        }
+
+        if (!trimmed) {
+            rtf += "\\pard\\sa100\\par\n";
+            i++; continue;
+        }
+
+        // Headings
+        if (trimmed.startsWith('# ')) {
+            rtf += "{\\pard\\b\\fs40\\sb400\\sa200 " + parseInlineToRTF(trimmed.slice(2)) + "\\par}\n";
+        } else if (trimmed.startsWith('## ')) {
+            rtf += "{\\pard\\b\\fs32\\sb300\\sa150 " + parseInlineToRTF(trimmed.slice(3)) + "\\par}\n";
+        } else if (trimmed.startsWith('### ')) {
+            rtf += "{\\pard\\b\\fs28\\sb250\\sa100 " + parseInlineToRTF(trimmed.slice(4)) + "\\par}\n";
+        } else if (trimmed.startsWith('#### ')) {
+            rtf += "{\\pard\\b\\fs26\\sb200\\sa100 " + parseInlineToRTF(trimmed.slice(5)) + "\\par}\n";
+        }
+        else if (trimmed.startsWith('>')) {
+            const level = (trimmed.match(/^>+/g) || ['>'])[0].length;
+            const text = trimmed.replace(/^>+\s*/, '');
+            rtf += `{\\pard\\li${level * 720}\\cf2\\i\\sa100 ` + parseInlineToRTF(text) + "\\par}\n";
+        }
+        else if (/^(\s*)[-*+]\s+/.test(line)) {
+            const match = line.match(/^(\s*)([-*+]\s+)/);
+            const indent = match ? Math.floor(match[1].length / 4) : 0;
+            const text = line.replace(/^\s*[-*+]\s+/, '');
+            rtf += `{\\pard\\li${(indent + 1) * 360}\\fi-360\\'b7\\tab ` + parseInlineToRTF(text) + "\\par}\n";
+        }
+        else if (/^(\s*)\d+\.\s+/.test(line)) {
+            const match = line.match(/^(\s*)(\d+\.\s+)/);
+            const indent = match ? Math.floor(match[1].length / 4) : 0;
+            const number = match ? match[2] : "1. ";
+            const text = line.replace(/^\s*\d+\.\s+/, '');
+            rtf += `{\\pard\\li${(indent + 1) * 360}\\fi-360 ${number}\\tab ` + parseInlineToRTF(text) + "\\par}\n";
+        }
+        else {
+            rtf += "{\\pard\\sa150 " + parseInlineToRTF(trimmed) + "\\par}\n";
+        }
+        i++;
+    }
+    return rtf;
 }
