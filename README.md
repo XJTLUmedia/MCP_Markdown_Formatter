@@ -1,73 +1,128 @@
-# React + TypeScript + Vite
+# AI Question Copier & Multi-Format Exporter
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+### *Turn "AI Noise" into "Classroom Ready" in 5 Seconds.*
 
-Currently, two official plugins are available:
+## The Problem: The "Final Mile" Friction
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+You asked an AI to write 20 questions. It did a great job. **But now you’re stuck:**
 
-## React Compiler
+* **The Formatting Nightmare:** Spent 30 minutes fixing "Option A" bullet points in Word?
+* **The LMS Wall:** Does your school’s platform (Canvas, Moodle, Kahoot) refuse to "just paste" text?
+* **The Math Glitch:** Did your  formulas turn into unreadable gibberish during the copy-paste?
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+**Generating questions takes seconds. Formatting them takes an hour. That is a broken workflow.**
 
-## Expanding the ESLint configuration
+---
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## The Mission (Why This Exists)
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+Our goal is **Zero-Effort Integration**. We believe educators and trainers should spend their time **evaluating student progress**, not wrestling with CSV headers and margin alignments.
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+### ⏳ Time Saved: A Quick Comparison
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+| Task | Manual Method | With AI Copier |
+| --- | --- | --- |
+| **Extracting Q&A** | 10-15 Mins (Copying each line) | **2 Seconds** (Auto-detect) |
+| **Formatting Math** | 20 Mins (Fixing symbols) | **Instant** ( Support) |
+| **LMS Integration** | 15 Mins (Manual Entry) | **1-Click** (CSV/JSON Export) |
+| **Total Prep Time** | **~45-60 Minutes** | **< 1 Minute** |
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+---
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Key Value Props
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+### Instant "Smart-Parse"
+
+Don't worry about how the AI responded. Whether it gave you numbered lists, bold text, or raw blocks, our parser identifies **Question**, **Options**, and **Answer Keys** instantly.
+
+### Multi-Destination Export
+
+One source, infinite possibilities. Export to:
+
+* **Kahoot/Quizizz:** Ready-to-upload Excel templates.
+* **Print:** Beautifully formatted PDFs for physical exams.
+* **LMS:** JSON/XML for Canvas, Blackboard, or Moodle.
+* **Dev-Ready:** Markdown for your personal documentation.
+
+### Perfect Math & Code
+
+We treat equations and code blocks as first-class citizens. No more broken `$\sqrt{x}$` or un-indented Python snippets.
+
+---
+
+## How it Saves Your Day
+
+1. **Paste:** Throw any messy AI output into the hopper.
+2. **Verify:** See your questions neatly organized in a clean UI.
+3. **Blast:** Export to 3 different formats at once and get back to your coffee.
+
+---
+
+## The Ultimate Goal
+
+**To reclaim 5 hours of your week.** By removing the technical barrier between AI intelligence and classroom delivery, we empower teachers to create **more frequent, higher-quality assessments** without the burnout.
+
+---
+
+
+## Key Features
+
+### Intelligent Extraction
+
+Our AI engine doesn't just "copy" text; it **understands** the structure. It automatically identifies:
+
+* **Question Stems**
+* **Multiple Choice Options** (distractors vs. correct answers)
+* **Explanation/Rationale**
+* **Difficulty Levels & Tags**
+
+### Multi-Format Exporting
+
+Don't be locked into one ecosystem. Move your questions wherever you need them:
+
+* **PDF/Word:** Professional handouts for physical exams.
+* **CSV/Excel:** Bulk upload to Kahoot, Quizizz, or Google Forms.
+* **JSON:** Seamless integration for developers and custom LMS.
+* **Markdown:** Perfect for documentation and GitHub-based learning.
+
+### Math & Code Ready
+
+Whether you are a Chemistry teacher or a Coding bootcamp instructor, we've got you covered. Full support for  equations and syntax-highlighted code snippets.
+
+---
+
+## How It Works
+
+1. **Generate:** Use your favorite AI (ChatGPT, Claude, Gemini) to create a set of questions.
+2. **Copy:** Paste the raw AI response into the Copier.
+3. **Export:** Choose your format and hit **Download**.
+
+---
+
+## Installation & Usage
+
+### For Developers
+
+```bash
+# Clone the repository
+git clone https://github.com/XJTLUmedia/AI_answer_copier.git
+
+# Install dependencies
+npm install
+
+# Start the dev server
+npm run dev
+
+
+### For Educators
+
+Simply visit [AI_answer_copier](https://localhost:5173)
+
+---
+
+## Contributing
+
+We love help! 
+---
+
+
