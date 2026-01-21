@@ -2,6 +2,10 @@
 
 ### *Turn "AI Noise" into "Classroom Ready" in 5 Seconds.*
 
+### Live demo
+
+[AI_answer_copier_website](https://ai-answer-copier.vercel.app)
+
 ## The Problem: The "Final Mile" Friction
 
 You asked an AI to write 20 questions. It did a great job. **But now you’re stuck:**
@@ -122,7 +126,8 @@ Simply visit your vite at port 5173 [AI_answer_copier](https://localhost:5173)
 
 ## Contributing
 
-We love help! 
+We love help!!! if you find any other circumstances where this project can be improved. Please consider make a pull request.
+
 ---
 
 
