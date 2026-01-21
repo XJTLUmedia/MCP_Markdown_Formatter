@@ -112,11 +112,11 @@ npm install
 
 # Start the dev server
 npm run dev
-
+```
 
 ### For Educators
 
-Simply visit [AI_answer_copier](https://localhost:5173)
+Simply visit your vite at port 5173 [AI_answer_copier](https://localhost:5173)
 
 ---
 
