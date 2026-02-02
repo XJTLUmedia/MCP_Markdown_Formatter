@@ -1,10 +1,22 @@
-# AI Question Copier & Multi-Format Exporter
+# MCP server supported AI Question Copier & Multi-Format Exporter
 
 ### *Turn "AI Noise" into "Classroom Ready" in 5 Seconds.*
 
+🚀 NEW: MCP Server Support
+Stop Copy-Pasting Entirely. This tool now functions as an MCP (Model Context Protocol) Server. This means if you use Claude Desktop or any MCP-enabled IDE, the AI can directly send questions to the exporter without you ever hitting Ctrl+C.
+
+Native Integration: Claude can now "see" your export formats.
+
+Direct Pipeline: Ask the AI: "Generate 10 physics questions and export them to my Quizizz CSV via the Copier."
+
+Automated Workflow: Bridge the gap between LLM reasoning and local file generation.
+
+
 ### Live demo
 
+Online HTML version
 [AI_answer_copier_website](https://ai-answer-copier.vercel.app)
+
 
 <img width="1327" height="732" alt="live_demo1" src="https://github.com/user-attachments/assets/ed6b9b14-2778-45c7-a27d-c3cc8afd9cd9" />
 <img width="1170" height="831" alt="live_demo2" src="https://github.com/user-attachments/assets/98c81708-e1e7-45e4-b27c-44450f51c017" />
@@ -120,6 +132,13 @@ npm install
 
 # Start the dev server
 npm run dev
+```
+
+```bash
+# Use MCP server
+cd mcp-server
+# Run MCP server
+npm run inspector
 ```
 
 ### For Educators
