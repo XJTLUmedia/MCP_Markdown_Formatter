@@ -2,6 +2,14 @@
 
 ### *Turn "AI Noise" into "Classroom Ready" in 5 Seconds.*
 
+### Live demo
+
+[AI_answer_copier_website](https://ai-answer-copier.vercel.app)
+
+<img width="1327" height="732" alt="live_demo1" src="https://github.com/user-attachments/assets/ed6b9b14-2778-45c7-a27d-c3cc8afd9cd9" />
+<img width="1170" height="831" alt="live_demo2" src="https://github.com/user-attachments/assets/98c81708-e1e7-45e4-b27c-44450f51c017" />
+
+
 ## The Problem: The "Final Mile" Friction
 
 You asked an AI to write 20 questions. It did a great job. **But now you’re stuck:**
@@ -112,17 +120,18 @@ npm install
 
 # Start the dev server
 npm run dev
-
+```
 
 ### For Educators
 
-Simply visit [AI_answer_copier](https://localhost:5173)
+Simply visit your vite at port 5173 [AI_answer_copier](https://localhost:5173)
 
 ---
 
 ## Contributing
 
-We love help! 
+We love help!!! if you find any other circumstances where this project can be improved. Please consider make a pull request.
+
 ---
 
 
