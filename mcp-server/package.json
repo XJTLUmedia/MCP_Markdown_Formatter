@@ -1,0 +1,31 @@
+{
+    "name": "markdown-mcp-server",
+    "version": "1.0.0",
+    "description": "MCP Server for Markdown Processing and Exporting",
+    "type": "module",
+    "scripts": {
+        "start": "node dist/mcp-server/src/index.js",
+        "dev": "tsx src/index.ts",
+        "build": "tsc",
+        "inspector": "npx @modelcontextprotocol/inspector"
+    },
+    "dependencies": {
+        "@modelcontextprotocol/sdk": "^0.6.0",
+        "@types/node": "^20.11.0",
+        "docx": "^9.5.1",
+        "puppeteer": "^23.0.0",
+        "rehype-katex": "^7.0.0",
+        "rehype-parse": "^9.0.0",
+        "rehype-stringify": "^10.0.0",
+        "remark-gfm": "^4.0.1",
+        "remark-math": "^6.0.0",
+        "remark-parse": "^11.0.0",
+        "remark-rehype": "^11.1.0",
+        "remark-stringify": "^11.0.0",
+        "tsx": "^4.7.1",
+        "typescript": "^5.3.3",
+        "unified": "^11.0.5",
+        "xlsx": "^0.18.5",
+        "zod": "^3.23.8"
+    }
+}
