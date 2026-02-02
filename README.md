@@ -137,9 +137,32 @@ npm run dev
 ```bash
 # Use MCP server
 cd mcp-server
-# Run MCP server
-npm run inspector
+npm install
+npm run build
 ```
+
+### 🔌 How to Bind to AI Tools (MCP)
+
+To use these 14 tools directly inside **MCP like Claude**, edit your configuration file:
+
+1. Open `%APPDATA%\Claude\claude_desktop_config.json` (Windows) or `~/Library/Application Support/Claude/claude_desktop_config.json` (Mac).
+2. Add the following entry to the `mcpServers` list:
+
+```json
+{
+  "mcpServers": {
+    "markdown-formatter": {
+      "command": "node",
+      "args": [
+        "YOUR_PATH_TO_PROJECT/mcp-server/dist/mcp-server/src/index.js"
+      ]
+    }
+  }
+}
+```
+*Note: Replace `YOUR_PATH_TO_PROJECT` with the absolute path to this folder.*
+
+3. **Restart Claude Desktop.** You will now see a 🔌 icon and all 14 tools (DOCX, PDF, XLSX, etc.) will be available for the AI to use automatically.
 
 ### For Educators
 
