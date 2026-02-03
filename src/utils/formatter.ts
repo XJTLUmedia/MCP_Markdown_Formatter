@@ -6,7 +6,6 @@ import remarkRehype from 'remark-rehype';
 import rehypeKatex from 'rehype-katex';
 import rehypeStringify from 'rehype-stringify';
 import strip from 'strip-markdown';
-
 import remarkStringify from 'remark-stringify';
 
 /**

@@ -55,9 +55,9 @@ export function generateXML(content: string, title: string = 'document'): string
 }
 
 /**
- * Generate XLSX Buffer
+ * Parse markdown content to a 2D array of strings for table-like representations (CSV, XLSX)
  */
-export function generateXLSXIndex(content: string): Buffer {
+export function parseMarkdownToTableData(content: string): string[][] {
     const tableData: string[][] = [];
     const paragraphs = content.split('\n\n');
 
@@ -76,7 +76,14 @@ export function generateXLSXIndex(content: string): Buffer {
             if (cleaned) tableData.push([cleaned]);
         }
     });
+    return tableData;
+}
 
+/**
+ * Generate XLSX Buffer
+ */
+export function generateXLSXIndex(content: string): Buffer {
+    const tableData = parseMarkdownToTableData(content);
     const ws = XLSX.utils.aoa_to_sheet(tableData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Document");

@@ -19,7 +19,8 @@ import {
     generateCSV,
     generateJSON,
     generateXML,
-    generateXLSXIndex
+    generateXLSXIndex,
+    cleanMarkdownText
 } from "../src/utils/core-exports.js";
 import { Packer } from "docx";
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -209,7 +210,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             return handleOutput(String(file), outputPath);
         }
 
-        if (name === "convert_to_txt") return handleOutput(stripMarkdown(markdown), outputPath);
+        if (name === "convert_to_txt") return handleOutput(cleanMarkdownText(markdown), outputPath);
         if (name === "convert_to_rtf") return handleOutput(parseMarkdownToRTF(markdown), outputPath);
         if (name === "convert_to_latex") return handleOutput(parseMarkdownToLaTeX(markdown), outputPath);
 

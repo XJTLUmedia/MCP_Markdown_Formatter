@@ -21,7 +21,8 @@ import {
     generateCSV,
     generateJSON,
     generateXML,
-    generateXLSXIndex
+    generateXLSXIndex,
+    cleanMarkdownText
 } from "../../src/utils/core-exports.js";
 import { Packer } from "docx";
 
@@ -244,7 +245,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
 
         if (name === "convert_to_txt") {
-            const txt = stripMarkdown(markdown);
+            const txt = cleanMarkdownText(markdown);
             return handleOutput(txt, outputPath);
         }
 

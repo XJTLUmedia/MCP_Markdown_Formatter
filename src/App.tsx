@@ -24,7 +24,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   markdownToRichHtml,
   markdownToPlainText,
-  harmonizeMarkdown
+  harmonizeMarkdown,
+  generateBookmarklet
 } from './utils/formatter';
 import {
   exportAsText,
@@ -220,6 +221,13 @@ function App() {
       console.error(err);
     }
     setIsProcessing(false);
+  };
+
+  const handleCopyBookmarklet = () => {
+    const bookmarklet = generateBookmarklet();
+    navigator.clipboard.writeText(bookmarklet);
+    setExportMessage('📋 Bookmarklet copied! Drag to Bookmarks bar.');
+    setTimeout(() => setExportMessage(''), 4000);
   };
 
   const loadTemplate = (templateName: string) => {
@@ -467,6 +475,7 @@ Example:
             <li><strong>Data (JSON/CSV/Excel):</strong> Extract structured tables directly into database formats.</li>
             <li><strong>Technical (LaTeX/XML/RTF):</strong> Seamless conversion for scientific and legacy workflows.</li>
             <li><strong>Harmonize:</strong> Click the ✨ icon to automatically standardize your markdown syntax.</li>
+            <li><strong>Web Clipper:</strong> <button onClick={handleCopyBookmarklet} className="text-indigo-400 hover:text-indigo-300 underline font-medium cursor-pointer">Copy Bookmarklet</button> to extract markdown from any website directly.</li>
           </ul>
         </div>
 

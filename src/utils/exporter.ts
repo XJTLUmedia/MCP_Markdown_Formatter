@@ -8,18 +8,21 @@ import {
     AlignmentType
 } from 'docx';
 import {
-    stripMarkdown,
     parseMarkdownToRTF,
     parseMarkdownToDocx,
     parseMarkdownToLaTeX,
-    cleanMarkdownText
+    cleanMarkdownText,
+    generateCSV,
+    generateJSON,
+    generateXML,
+    parseMarkdownToTableData
 } from './core-exports';
 
 /**
  * Export content as Plain Text (.txt)
  */
 export function exportAsText(content: string, filename: string = 'document'): void {
-    const cleanText = stripMarkdown(content);
+    const cleanText = cleanMarkdownText(content);
     const blob = new Blob([cleanText], { type: 'text/plain;charset=utf-8' });
     saveAs(blob, filename.endsWith('.txt') ? filename : `${filename}.txt`);
 }
@@ -83,14 +86,8 @@ export function exportAsLaTeX(content: string, filename: string = 'document'): v
  * Export tables as CSV (.csv)
  */
 export function exportAsCSV(content: string, filename: string = 'data'): void {
-    const tableLines = content.match(/\|.*\|/g);
-    if (!tableLines) return;
-    let csv = "";
-    tableLines.forEach(line => {
-        if (line.includes('---')) return;
-        const cells = line.split('|').map(c => c.trim()).filter(c => c !== "").map(c => stripMarkdown(c));
-        if (cells.length > 0) csv += cells.map(c => `"${c.replace(/"/g, '""')}"`).join(',') + "\n";
-    });
+    const csv = generateCSV(content);
+    if (!csv) return;
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     saveAs(blob, filename.endsWith('.csv') ? filename : `${filename}.csv`);
 }
@@ -99,13 +96,8 @@ export function exportAsCSV(content: string, filename: string = 'data'): void {
  * Export as JSON (.json)
  */
 export function exportAsJSON(content: string, filename: string = 'document'): void {
-    const data = {
-        title: filename,
-        export_timestamp: new Date().toISOString(),
-        content: stripMarkdown(content),
-        structured_content: content.split('\n\n').map(block => stripMarkdown(block))
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
+    const json = generateJSON(content, filename);
+    const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
     saveAs(blob, filename.endsWith('.json') ? filename : `${filename}.json`);
 }
 
@@ -113,11 +105,7 @@ export function exportAsJSON(content: string, filename: string = 'document'): vo
  * Export as XML (.xml)
  */
 export function exportAsXML(content: string, filename: string = 'document'): void {
-    let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<document>\n`;
-    xml += `  <title>${filename}</title>\n`;
-    xml += `  <content><![CDATA[${stripMarkdown(content)}]]></content>\n`;
-    xml += `  <metadata>\n    <timestamp>${new Date().toISOString()}</timestamp>\n  </metadata>\n`;
-    xml += `</document>`;
+    const xml = generateXML(content, filename);
     const blob = new Blob([xml], { type: 'application/xml;charset=utf-8' });
     saveAs(blob, filename.endsWith('.xml') ? filename : `${filename}.xml`);
 }
@@ -142,24 +130,8 @@ export function exportAsRTF(content: string, filename: string = 'document'): voi
  * Export as Excel (.xlsx) preserving document narrative and table structures
  */
 export function exportAsXLSX(content: string, filename: string = 'data'): void {
-    const tableData: string[][] = [];
-    const paragraphs = content.split('\n\n');
-
-    paragraphs.forEach(para => {
-        const lines = para.trim().split('\n');
-        const isTable = lines.some(l => l.includes('|'));
-
-        if (isTable) {
-            lines.forEach(line => {
-                if (line.includes('---')) return;
-                const cells = line.split('|').map(c => c.trim()).filter(c => c !== "").map(c => stripMarkdown(c));
-                if (cells.length > 0) tableData.push(cells);
-            });
-        } else {
-            const cleaned = stripMarkdown(para);
-            if (cleaned) tableData.push([cleaned]);
-        }
-    });
+    const tableData = parseMarkdownToTableData(content);
+    if (tableData.length === 0) return;
 
     const ws = XLSX.utils.aoa_to_sheet(tableData);
     const wb = XLSX.utils.book_new();
