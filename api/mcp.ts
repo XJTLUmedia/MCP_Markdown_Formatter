@@ -343,7 +343,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         // Copy headers and status
         res.status(webResponse.status);
-        webResponse.headers.forEach((v, k) => res.setHeader(k, v));
+        webResponse.headers.forEach((v: string, k: string) => res.setHeader(k, v));
 
         if (webResponse.body) {
             const reader = webResponse.body.getReader();
