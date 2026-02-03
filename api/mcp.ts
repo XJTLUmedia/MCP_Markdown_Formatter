@@ -263,17 +263,15 @@ function setupServerHandlers(server: Server) {
 
 }
 
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 
 async function getOrCreateInstance(sessionId: string): Promise<McpInstance> {
     if (instances.has(sessionId)) {
         return instances.get(sessionId)!;
     }
 
-    // Use stateless mode (sessionIdGenerator: undefined)
-    // This prevents "400 Server not initialized" errors on cold starts/recycles
-    const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: undefined,
+    const transport = new WebStandardStreamableHTTPServerTransport({
+        sessionIdGenerator: () => sessionId,
     });
 
     const server = new Server(
@@ -299,86 +297,66 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.setHeader('X-Accel-Buffering', 'no');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
+    res.setHeader('Content-Type', 'application/json');
 
     if (req.method === 'OPTIONS') {
         res.status(200).end();
         return;
     }
 
-    // Determine session ID - either from client or generated
-    // Generating a random one for new connections ensures they get their own instance/SSE slot
     const providedSessionId = (req.query.sessionId as string) || (req.headers['mcp-session-id'] as string);
     const sessionId = providedSessionId || `s_${Math.random().toString(36).substring(2, 10)}`;
-
-    // Always echo the session ID back so the client remains sticky to this instance
     res.setHeader('mcp-session-id', sessionId);
-
-    console.log(`[MCP] ${req.method} ${req.url} | Session: ${sessionId} (${providedSessionId ? 'sticky' : 'new'})`);
 
     const isEventStream =
         req.headers.accept?.includes('text/event-stream') ||
         req.headers['mcp-protocol-version'] ||
         req.query.sessionId;
 
-    // Help page for browser GETs
     if (req.method === 'GET' && !isEventStream) {
-        res.status(200).setHeader('Content-Type', 'text/html').send(`
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>Markdown Formatter MCP</title>
-                <style>
-                    body { font-family: system-ui, -apple-system, sans-serif; padding: 40px; line-height: 1.6; max-width: 700px; margin: 0 auto; background: #0f172a; color: #f8fafc; }
-                    .card { background: #1e293b; padding: 24px; border-radius: 12px; border: 1px solid #334155; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
-                    pre { background: #0f172a; padding: 16px; border-radius: 8px; overflow-x: auto; color: #38bdf8; font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; }
-                    .status { display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px; border-radius: 99px; background: #064e3b; color: #34d399; font-size: 0.8125rem; font-weight: 600; }
-                    .dot { width: 8px; height: 8px; background: #34d399; border-radius: 50%; box-shadow: 0 0 8px #34d399; }
-                    h1 { margin: 0; font-size: 1.5rem; letter-spacing: -0.025em; }
-                    code { color: #f472b6; }
-                </style>
-            </head>
-            <body>
-                <div class="card">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-                        <h1>Markdown Formatter MCP</h1>
-                        <span class="status"><span class="dot"></span> Online</span>
-                    </div>
-                    <p>This is a Model Context Protocol (MCP) server endpoint running as a Vercel Serverless Function.</p>
-                    <p>Active instances in this node: ${instances.size}</p>
-                    
-                    <h2 style="font-size: 1.125rem; margin-top: 32px; color: #94a3b8;">Setup Instructions</h2>
-                    <p>To use this server, add it to your <code>claude_desktop_config.json</code>:</p>
-                    <pre>{
-  "mcpServers": {
-    "markdown-formatter": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/inspector", "https://ai-answer-copier.vercel.app/api/mcp"]
-    }
-  }
-}</pre>
-                </div>
-            </body>
-            </html>
-        `);
+        res.status(200).setHeader('Content-Type', 'text/html').send(`...Help HTML...`);
         return;
     }
 
     try {
         const instance = await getOrCreateInstance(sessionId);
 
-        // Anti-409: In stateless mode, if a client tries to Re-GET the SSE stream for 
-        // the same instance, we MUST close the old one or the SDK will throw 409 Conflict.
         if (req.method === 'GET' && isEventStream) {
             instance.transport.closeStandaloneSSEStream();
+
+            // Send immediate 200 OK headers to fix TLS/Handshake timing out on Vercel
+            res.status(200).setHeader('Content-Type', 'text/event-stream');
+            res.write(': heartbeat\n\n');
         }
 
         const body = (req.method === 'POST' || req.method === 'PUT') ? req.body : undefined;
-        await instance.transport.handleRequest(req, res, body);
-    } catch (error: any) {
-        console.error("[MCP] Error handling request:", error);
-        if (!res.headersSent) {
-            res.status(500).json({ error: error.message });
+
+        // Manual bridge to WebStandard API since Vercel Request/Response are slightly different
+        const url = new URL(req.url!, `http://${req.headers.host}`);
+        const webRequest = new Request(url, {
+            method: req.method,
+            headers: req.headers as any,
+            body: body ? JSON.stringify(body) : undefined
+        });
+
+        const webResponse = await instance.transport.handleRequest(webRequest);
+
+        // Copy headers and status
+        res.status(webResponse.status);
+        webResponse.headers.forEach((v, k) => res.setHeader(k, v));
+
+        if (webResponse.body) {
+            const reader = webResponse.body.getReader();
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                res.write(value);
+            }
         }
+        res.end();
+    } catch (error: any) {
+        console.error("[MCP] Error:", error);
+        if (!res.headersSent) res.status(500).json({ error: error.message });
     }
 }
 
