@@ -265,15 +265,15 @@ function setupServerHandlers(server: Server) {
 
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 
-async function getOrCreateInstance(sessionId?: string): Promise<McpInstance> {
-    if (sessionId && instances.has(sessionId)) {
-        console.log(`[MCP] Reusing instance for session: ${sessionId}`);
+async function getOrCreateInstance(sessionId: string): Promise<McpInstance> {
+    if (instances.has(sessionId)) {
         return instances.get(sessionId)!;
     }
 
-    console.log(`[MCP] Creating new instance${sessionId ? ' for session ' + sessionId : ''}`);
+    // Use stateless mode (sessionIdGenerator: undefined)
+    // This prevents "400 Server not initialized" errors on cold starts/recycles
     const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: () => sessionId || Math.random().toString(36).substring(2, 15),
+        sessionIdGenerator: undefined,
     });
 
     const server = new Server(
@@ -285,16 +285,7 @@ async function getOrCreateInstance(sessionId?: string): Promise<McpInstance> {
     await server.connect(transport);
 
     const instance = { server, transport };
-
-    // Register handlers to track this instance by ID
-    (transport as any)._webStandardTransport.onsessioninitialized = (finalId: string) => {
-        console.log(`[MCP] Session initialized: ${finalId}`);
-        instances.set(finalId, instance);
-    };
-    (transport as any)._webStandardTransport.onsessionclosed = (closedId: string) => {
-        console.log(`[MCP] Session closed: ${closedId}`);
-        instances.delete(closedId);
-    };
+    instances.set(sessionId, instance);
 
     return instance;
 }
@@ -314,15 +305,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return;
     }
 
-    const sessionId = (req.query.sessionId as string) || (req.headers['mcp-session-id'] as string);
-    console.log(`[MCP] ${req.method} ${req.url} | Session: ${sessionId || 'none'}`);
+    // Determine session ID - either from client or generated
+    // Generating a random one for new connections ensures they get their own instance/SSE slot
+    const providedSessionId = (req.query.sessionId as string) || (req.headers['mcp-session-id'] as string);
+    const sessionId = providedSessionId || `s_${Math.random().toString(36).substring(2, 10)}`;
 
-    // Help page for browser GETs
+    // Always echo the session ID back so the client remains sticky to this instance
+    res.setHeader('mcp-session-id', sessionId);
+
+    console.log(`[MCP] ${req.method} ${req.url} | Session: ${sessionId} (${providedSessionId ? 'sticky' : 'new'})`);
+
     const isEventStream =
         req.headers.accept?.includes('text/event-stream') ||
         req.headers['mcp-protocol-version'] ||
         req.query.sessionId;
 
+    // Help page for browser GETs
     if (req.method === 'GET' && !isEventStream) {
         res.status(200).setHeader('Content-Type', 'text/html').send(`
             <!DOCTYPE html>
@@ -346,7 +344,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                         <span class="status"><span class="dot"></span> Online</span>
                     </div>
                     <p>This is a Model Context Protocol (MCP) server endpoint running as a Vercel Serverless Function.</p>
-                    <p>Current active sessions in this node: ${instances.size}</p>
+                    <p>Active instances in this node: ${instances.size}</p>
                     
                     <h2 style="font-size: 1.125rem; margin-top: 32px; color: #94a3b8;">Setup Instructions</h2>
                     <p>To use this server, add it to your <code>claude_desktop_config.json</code>:</p>
@@ -368,8 +366,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
         const instance = await getOrCreateInstance(sessionId);
 
-        // Prevent 409 Conflict: If this is a new GET request for an existing session, 
-        // close the previous stream first.
+        // Anti-409: In stateless mode, if a client tries to Re-GET the SSE stream for 
+        // the same instance, we MUST close the old one or the SDK will throw 409 Conflict.
         if (req.method === 'GET' && isEventStream) {
             instance.transport.closeStandaloneSSEStream();
         }
