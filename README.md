@@ -164,6 +164,12 @@ To use these 14 tools directly inside **MCP like Claude**, edit your configurati
 ```
 *Note: Replace `YOUR_PATH_TO_PROJECT` with the absolute path to this folder.*
 
+You can use live demo instance on vercel using
+
+```bash
+npx @modelcontextprotocol/inspector https://ai-answer-copier.vercel.app/api/mcp
+```
+
 3. **Restart Claude Desktop.** You will now see a 🔌 icon and all 14 tools (DOCX, PDF, XLSX, etc.) will be available for the AI to use automatically.
 
 ### For Educators
