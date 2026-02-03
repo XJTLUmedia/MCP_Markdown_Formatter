@@ -12,7 +12,6 @@ import rehypeStringify from 'rehype-stringify';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import {
-    stripMarkdown,
     parseMarkdownToRTF,
     parseMarkdownToDocx,
     parseMarkdownToLaTeX,
@@ -28,8 +27,8 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 // Setup browser launch helper for Vercel vs Local
 const getBrowser = async () => {
     if (process.env.VERCEL) {
-        const chromium = await import('@sparticuz/chromium-min');
-        const puppeteer = await import('puppeteer-core');
+        const chromium = (await import('@sparticuz/chromium-min')) as any;
+        const puppeteer = (await import('puppeteer-core')) as any;
         return puppeteer.launch({
             args: chromium.args,
             defaultViewport: chromium.defaultViewport,
@@ -37,7 +36,7 @@ const getBrowser = async () => {
             headless: chromium.headless,
         });
     } else {
-        const puppeteer = await import('puppeteer');
+        const puppeteer = (await import('puppeteer')) as any;
         return puppeteer.launch({ headless: true });
     }
 };
@@ -54,8 +53,7 @@ const server = new Server(
     }
 );
 
-// Binary format types
-const BINARY_FORMATS = ['docx', 'pdf', 'xlsx', 'png', 'image'] as const;
+
 
 // Helper to handle output
 async function handleOutput(
