@@ -273,31 +273,46 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Add CORS and Streaming headers
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept');
+    res.setHeader('Access-Control-Allow-Headers', '*');
+    res.setHeader('Access-Control-Expose-Headers', '*');
     res.setHeader('X-Accel-Buffering', 'no'); // Disable buffering for SSE streaming
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('Cache-Control', 'no-cache');
 
     if (req.method === 'OPTIONS') {
         res.status(200).end();
         return;
     }
 
+    // Logging for debugging
+    console.log(`[MCP] ${req.method} ${req.url}`);
+    console.log(`[MCP] Headers: ${JSON.stringify(req.headers)}`);
+    if (req.query) console.log(`[MCP] Query: ${JSON.stringify(req.query)}`);
+
     // Lazy initialization of transport and server connection
     if (!transport) {
         try {
+            console.log("[MCP] Initializing transport (stateless)...");
             transport = new StreamableHTTPServerTransport({
-                // Generate unique session IDs to avoid "Conflict: Only one SSE stream is allowed per session"
-                sessionIdGenerator: () => Math.random().toString(36).substring(2, 15),
+                // Stateless mode is more reliable on Vercel as it doesn't require 
+                // subsequent POST requests to hit the same lambda instance.
+                sessionIdGenerator: undefined,
             });
             await server.connect(transport);
+            console.log("[MCP] Server connected to transport");
         } catch (error) {
-            console.error("Failed to initialize MCP server:", error);
+            console.error("[MCP] Failed to initialize MCP server:", error);
             res.status(500).json({ error: "Internal Server Error during initialization" });
             return;
         }
     }
 
     // Friendly message for browser visits (standard GET without event-stream header)
-    const isEventStream = req.headers.accept?.includes('text/event-stream') || req.query.sessionId;
+    const isEventStream =
+        req.headers.accept?.includes('text/event-stream') ||
+        req.headers['mcp-protocol-version'] ||
+        req.query.sessionId;
+
     if (req.method === 'GET' && !isEventStream) {
         res.status(200).setHeader('Content-Type', 'text/html').send(`
             <!DOCTYPE html>
@@ -341,9 +356,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     try {
         // Handle request via SDK transport
-        await transport.handleRequest(req, res, req.body);
+        // Ensure body is only passed for POST/PUT requests
+        const body = (req.method === 'POST' || req.method === 'PUT') ? req.body : undefined;
+        await transport.handleRequest(req, res, body);
     } catch (error: any) {
-        console.error("MCP Error:", error);
+        console.error("[MCP] Error handling request:", error);
         if (!res.headersSent) {
             res.status(500).json({ error: error.message });
         }
