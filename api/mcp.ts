@@ -268,7 +268,6 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 
 // Keep server and transport references at the top level to benefit from Vercel's warm starts
 let transport: StreamableHTTPServerTransport | null = null;
-let isServerConnected = false;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Add CORS and Streaming headers
@@ -290,7 +289,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 sessionIdGenerator: () => Math.random().toString(36).substring(2, 15),
             });
             await server.connect(transport);
-            isServerConnected = true;
         } catch (error) {
             console.error("Failed to initialize MCP server:", error);
             res.status(500).json({ error: "Internal Server Error during initialization" });
