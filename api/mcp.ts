@@ -275,7 +275,47 @@ const transport = new StreamableHTTPServerTransport({
 await server.connect(transport);
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+    // Add CORS and Streaming headers
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept');
+    res.setHeader('X-Accel-Buffering', 'no'); // Disable buffering for SSE streaming
+
+    if (req.method === 'OPTIONS') {
+        res.status(200).end();
+        return;
+    }
+
+    // Friendly message for browser visits
+    if (req.method === 'GET' && !req.headers.accept?.includes('text/event-stream')) {
+        res.status(200).setHeader('Content-Type', 'text/html').send(`
+            <!DOCTYPE html>
+            <html>
+            <head><title>MCP Server</title><style>body { font-family: system-ui; padding: 40px; line-height: 1.6; max-width: 600px; margin: 0 auto; }</style></head>
+            <body>
+                <h1>Markdown Formatter MCP Server</h1>
+                <p>This is a Model Context Protocol (MCP) server endpoint running on Vercel.</p>
+                <p>To use this server, connect with an MCP client using the SSE transport at this URL.</p>
+                <p><strong>Config for Claude Desktop:</strong></p>
+                <pre style="background: #f4f4f4; padding: 15px; border-radius: 5px;">
+{
+"mcpServers": {
+    "markdown-formatter": {
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/inspector", "https://ai-answer-copier.vercel.app/api/mcp"]
+    }
+}
+}</pre>
+                <p><em>Note: Ensure you are hitting the correct API path.</em></p>
+            </body>
+            </html>
+        `);
+        return;
+    }
+
     try {
+        // Handle request via SDK transport
+        // We pass req.body directly as Vercel parses JSON for us
         await transport.handleRequest(req, res, req.body);
     } catch (error: any) {
         console.error("MCP Error:", error);
