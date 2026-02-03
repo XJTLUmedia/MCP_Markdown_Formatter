@@ -52,14 +52,22 @@ interface McpInstance {
 const instances = new Map<string, McpInstance>();
 
 // Shared setup for all instances
-function zodSchemaToToolInput(schema: z.ZodType<any>): any {
+function zodSchemaToToolInput(schema: z.ZodType<any>, descriptions: Record<string, string> = {}): any {
     const shape = (schema as any).shape;
     const properties: any = {};
     const required: string[] = [];
     for (const key in shape) {
         const field = shape[key];
         const isOptional = field.isOptional?.() || field instanceof z.ZodOptional;
-        properties[key] = { type: "string" };
+
+        let type = "string";
+        if (field instanceof z.ZodBoolean) type = "boolean";
+        if (field instanceof z.ZodNumber) type = "number";
+
+        properties[key] = {
+            type: type,
+            description: descriptions[key] || `The ${key} parameter`
+        };
         if (!isOptional) required.push(key);
     }
     return { type: "object", properties, required };
@@ -121,73 +129,118 @@ function setupServerHandlers(server: Server) {
             tools: [
                 {
                     name: "harmonize_markdown",
-                    description: "Standardize markdown syntax",
-                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), output_path: z.string().optional() })),
+                    description: "Standardize markdown syntax (fix bullets, spacing, tables)",
+                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), output_path: z.string().optional() }), {
+                        markdown: "The raw markdown content to be standardized",
+                        output_path: "Optional: Full local file path to save the cleaned markdown"
+                    }),
                 },
                 {
                     name: "convert_to_txt",
-                    description: "Convert Markdown to Plain Text",
-                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), output_path: z.string().optional() })),
+                    description: "Convert Markdown to Plain Text (strips all formatting)",
+                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), output_path: z.string().optional() }), {
+                        markdown: "The markdown content to strip",
+                        output_path: "Local path where the text file should be saved"
+                    }),
                 },
                 {
                     name: "convert_to_rtf",
-                    description: "Convert Markdown to RTF",
-                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), output_path: z.string().optional() })),
+                    description: "Convert Markdown to RTF (Rich Text Format)",
+                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), output_path: z.string().optional() }), {
+                        markdown: "The markdown content to convert",
+                        output_path: "Local path where the RTF should be saved"
+                    }),
                 },
                 {
                     name: "convert_to_latex",
-                    description: "Convert Markdown to LaTeX",
-                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), output_path: z.string().optional() })),
+                    description: "Convert Markdown to LaTeX (suitable for scientific publishing)",
+                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), output_path: z.string().optional() }), {
+                        markdown: "The markdown content to convert",
+                        output_path: "Local path where the .tex file should be saved"
+                    }),
                 },
                 {
                     name: "convert_to_docx",
-                    description: "Convert Markdown to DOCX",
-                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), output_path: z.string().optional() })),
+                    description: "Convert Markdown to DOCX (Microsoft Word)",
+                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), output_path: z.string().optional() }), {
+                        markdown: "The markdown content to convert",
+                        output_path: "Local path where the DOCX should be saved"
+                    }),
                 },
                 {
                     name: "convert_to_pdf",
-                    description: "Convert Markdown to PDF",
-                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), output_path: z.string().optional() })),
+                    description: "Convert Markdown to PDF (with math and table support)",
+                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), output_path: z.string().optional() }), {
+                        markdown: "The markdown content to convert",
+                        output_path: "Local path where the PDF should be saved"
+                    }),
                 },
                 {
                     name: "convert_to_image",
                     description: "Convert Markdown to PNG Image",
-                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), output_path: z.string().optional() })),
+                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), output_path: z.string().optional() }), {
+                        markdown: "The markdown content to render",
+                        output_path: "Local path where the PNG should be saved"
+                    }),
                 },
                 {
                     name: "convert_to_csv",
                     description: "Extract tables from Markdown to CSV",
-                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), output_path: z.string().optional() })),
+                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), output_path: z.string().optional() }), {
+                        markdown: "The markdown content containing tables",
+                        output_path: "Local path where the CSV should be saved"
+                    }),
                 },
                 {
                     name: "convert_to_json",
-                    description: "Convert Markdown to JSON structure",
-                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), title: z.string().optional(), output_path: z.string().optional() })),
+                    description: "Convert Markdown to structured JSON",
+                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), title: z.string().optional(), output_path: z.string().optional() }), {
+                        markdown: "The markdown content to parse",
+                        title: "Optional title for the JSON document",
+                        output_path: "Local path where the JSON should be saved"
+                    }),
                 },
                 {
                     name: "convert_to_xml",
-                    description: "Convert Markdown to XML",
-                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), title: z.string().optional(), output_path: z.string().optional() })),
+                    description: "Convert Markdown to XML structure",
+                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), title: z.string().optional(), output_path: z.string().optional() }), {
+                        markdown: "The markdown content to convert",
+                        title: "Optional root element title",
+                        output_path: "Local path where the XML should be saved"
+                    }),
                 },
                 {
                     name: "convert_to_xlsx",
-                    description: "Convert Markdown tables to Excel",
-                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), output_path: z.string().optional() })),
+                    description: "Convert Markdown tables to Excel (XLSX)",
+                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), output_path: z.string().optional() }), {
+                        markdown: "The markdown content containing tables",
+                        output_path: "Local path where the Excel file should be saved"
+                    }),
                 },
                 {
                     name: "convert_to_html",
-                    description: "Convert Markdown to HTML",
-                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), output_path: z.string().optional() })),
+                    description: "Convert Markdown to HTML (styled fragment)",
+                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), output_path: z.string().optional() }), {
+                        markdown: "The markdown content to convert",
+                        output_path: "Local path where the HTML file should be saved"
+                    }),
                 },
                 {
                     name: "convert_to_md",
-                    description: "Export original Markdown content",
-                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), harmonize: z.boolean().optional(), output_path: z.string().optional() })),
+                    description: "Export clean Markdown content",
+                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), harmonize: z.boolean().optional(), output_path: z.string().optional() }), {
+                        markdown: "The markdown content to export",
+                        harmonize: "Whether to apply standardization rules",
+                        output_path: "Local path where the markdown should be saved"
+                    }),
                 },
                 {
                     name: "generate_html",
-                    description: "Generate complete HTML document",
-                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), title: z.string().optional() })),
+                    description: "Generate a full standalone HTML document",
+                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), title: z.string().optional() }), {
+                        markdown: "The markdown content to convert",
+                        title: "Title of the HTML document"
+                    }),
                 }
             ],
         };
@@ -278,8 +331,17 @@ async function getOrCreateInstance(sessionId: string): Promise<McpInstance> {
     });
 
     const server = new Server(
-        { name: "markdown-formatter-mcp", version: "1.0.0" },
-        { capabilities: { tools: {} } }
+        {
+            name: "markdown-formatter-mcp",
+            version: "1.0.0",
+        },
+        {
+            capabilities: {
+                tools: {},
+                resources: {},
+                prompts: {}
+            }
+        }
     );
 
     setupServerHandlers(server);

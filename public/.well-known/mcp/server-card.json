@@ -1,89 +1,26 @@
 {
     "mcpV1": {
+        "metadata": {
+            "name": "Markdown Formatter & Converter MCP",
+            "description": "A high-performance MCP server for advanced markdown manipulation. Convert markdown to PDF, DOCX, XLSX, LaTeX, RTF, JSON, XML, and more with pixel-perfect rendering.",
+            "homepage": "https://ai-answer-copier.vercel.app",
+            "icon": "https://ai-answer-copier.vercel.app/favicon.ico",
+            "displayName": "Markdown Formatter"
+        },
         "tools": [
             {
                 "name": "harmonize_markdown",
-                "description": "Standardize markdown syntax",
+                "description": "Standardize markdown syntax into a consistent, clean format (GFM compatible). Fixes broken bullets, inconsistent spacing, and malformed tables.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
                         "markdown": {
-                            "type": "string"
+                            "type": "string",
+                            "description": "The raw markdown content to be standardized."
                         },
                         "output_path": {
-                            "type": "string"
-                        }
-                    },
-                    "required": [
-                        "markdown"
-                    ]
-                }
-            },
-            {
-                "name": "convert_to_txt",
-                "description": "Convert Markdown to Plain Text",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "markdown": {
-                            "type": "string"
-                        },
-                        "output_path": {
-                            "type": "string"
-                        }
-                    },
-                    "required": [
-                        "markdown"
-                    ]
-                }
-            },
-            {
-                "name": "convert_to_rtf",
-                "description": "Convert Markdown to RTF",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "markdown": {
-                            "type": "string"
-                        },
-                        "output_path": {
-                            "type": "string"
-                        }
-                    },
-                    "required": [
-                        "markdown"
-                    ]
-                }
-            },
-            {
-                "name": "convert_to_latex",
-                "description": "Convert Markdown to LaTeX",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "markdown": {
-                            "type": "string"
-                        },
-                        "output_path": {
-                            "type": "string"
-                        }
-                    },
-                    "required": [
-                        "markdown"
-                    ]
-                }
-            },
-            {
-                "name": "convert_to_docx",
-                "description": "Convert Markdown to DOCX",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "markdown": {
-                            "type": "string"
-                        },
-                        "output_path": {
-                            "type": "string"
+                            "type": "string",
+                            "description": "Optional: Full local file path to save the cleaned markdown."
                         }
                     },
                     "required": [
@@ -93,15 +30,17 @@
             },
             {
                 "name": "convert_to_pdf",
-                "description": "Convert Markdown to PDF",
+                "description": "Generate a professional PDF document from Markdown. Supports LaTeX math, GFM tables, and syntax-highlighted code blocks.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
                         "markdown": {
-                            "type": "string"
+                            "type": "string",
+                            "description": "The markdown content to convert."
                         },
                         "output_path": {
-                            "type": "string"
+                            "type": "string",
+                            "description": "Local path where the PDF should be saved."
                         }
                     },
                     "required": [
@@ -110,76 +49,18 @@
                 }
             },
             {
-                "name": "convert_to_image",
-                "description": "Convert Markdown to PNG Image",
+                "name": "convert_to_docx",
+                "description": "Convert Markdown to a standard Microsoft Word (DOCX) file. Preserves headings, lists, and basic formatting.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
                         "markdown": {
-                            "type": "string"
+                            "type": "string",
+                            "description": "The markdown content to convert."
                         },
                         "output_path": {
-                            "type": "string"
-                        }
-                    },
-                    "required": [
-                        "markdown"
-                    ]
-                }
-            },
-            {
-                "name": "convert_to_csv",
-                "description": "Extract tables from Markdown to CSV",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "markdown": {
-                            "type": "string"
-                        },
-                        "output_path": {
-                            "type": "string"
-                        }
-                    },
-                    "required": [
-                        "markdown"
-                    ]
-                }
-            },
-            {
-                "name": "convert_to_json",
-                "description": "Convert Markdown to JSON structure",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "markdown": {
-                            "type": "string"
-                        },
-                        "title": {
-                            "type": "string"
-                        },
-                        "output_path": {
-                            "type": "string"
-                        }
-                    },
-                    "required": [
-                        "markdown"
-                    ]
-                }
-            },
-            {
-                "name": "convert_to_xml",
-                "description": "Convert Markdown to XML",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "markdown": {
-                            "type": "string"
-                        },
-                        "title": {
-                            "type": "string"
-                        },
-                        "output_path": {
-                            "type": "string"
+                            "type": "string",
+                            "description": "Local path where the DOCX should be saved."
                         }
                     },
                     "required": [
@@ -189,15 +70,165 @@
             },
             {
                 "name": "convert_to_xlsx",
-                "description": "Convert Markdown tables to Excel",
+                "description": "Extract markdown tables and convert them into a Microsoft Excel (XLSX) workbook. Each table becomes a separate sheet.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
                         "markdown": {
-                            "type": "string"
+                            "type": "string",
+                            "description": "The markdown content containing tables."
                         },
                         "output_path": {
-                            "type": "string"
+                            "type": "string",
+                            "description": "Local path where the Excel file should be saved."
+                        }
+                    },
+                    "required": [
+                        "markdown"
+                    ]
+                }
+            },
+            {
+                "name": "convert_to_latex",
+                "description": "Transform Markdown into a LaTeX document suitable for academic publishing. Handles math formulas and citations.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "markdown": {
+                            "type": "string",
+                            "description": "The markdown content to convert."
+                        },
+                        "output_path": {
+                            "type": "string",
+                            "description": "Local path where the .tex file should be saved."
+                        }
+                    },
+                    "required": [
+                        "markdown"
+                    ]
+                }
+            },
+            {
+                "name": "convert_to_image",
+                "description": "Render Markdown as a high-resolution PNG image. Perfect for sharing formatted text on social media.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "markdown": {
+                            "type": "string",
+                            "description": "The markdown content to render."
+                        },
+                        "output_path": {
+                            "type": "string",
+                            "description": "Local path where the PNG should be saved."
+                        }
+                    },
+                    "required": [
+                        "markdown"
+                    ]
+                }
+            },
+            {
+                "name": "convert_to_rtf",
+                "description": "Convert Markdown to Rich Text Format (RTF) for maximum compatibility with legacy word processors.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "markdown": {
+                            "type": "string",
+                            "description": "The markdown content to convert."
+                        },
+                        "output_path": {
+                            "type": "string",
+                            "description": "Local path where the RTF should be saved."
+                        }
+                    },
+                    "required": [
+                        "markdown"
+                    ]
+                }
+            },
+            {
+                "name": "convert_to_txt",
+                "description": "Strip all markdown formatting to produce a clean, readable Plain Text (UTF-8) file.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "markdown": {
+                            "type": "string",
+                            "description": "The markdown content to strip."
+                        },
+                        "output_path": {
+                            "type": "string",
+                            "description": "Local path where the text file should be saved."
+                        }
+                    },
+                    "required": [
+                        "markdown"
+                    ]
+                }
+            },
+            {
+                "name": "convert_to_csv",
+                "description": "Extract the first table found in Markdown and convert it to a comma-separated values (CSV) file.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "markdown": {
+                            "type": "string",
+                            "description": "The markdown content containing a table."
+                        },
+                        "output_path": {
+                            "type": "string",
+                            "description": "Local path where the CSV should be saved."
+                        }
+                    },
+                    "required": [
+                        "markdown"
+                    ]
+                }
+            },
+            {
+                "name": "convert_to_json",
+                "description": "Parse Markdown into a structured JSON representation, useful for programmatic processing of document structure.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "markdown": {
+                            "type": "string",
+                            "description": "The markdown content to parse."
+                        },
+                        "title": {
+                            "type": "string",
+                            "description": "Optional title for the JSON document."
+                        },
+                        "output_path": {
+                            "type": "string",
+                            "description": "Local path where the JSON should be saved."
+                        }
+                    },
+                    "required": [
+                        "markdown"
+                    ]
+                }
+            },
+            {
+                "name": "convert_to_xml",
+                "description": "Convert Markdown semantics into a structured XML format.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "markdown": {
+                            "type": "string",
+                            "description": "The markdown content to convert."
+                        },
+                        "title": {
+                            "type": "string",
+                            "description": "Optional root element title."
+                        },
+                        "output_path": {
+                            "type": "string",
+                            "description": "Local path where the XML should be saved."
                         }
                     },
                     "required": [
@@ -207,15 +238,17 @@
             },
             {
                 "name": "convert_to_html",
-                "description": "Convert Markdown to HTML",
+                "description": "Convert Markdown to a clean, semantic HTML fragment or full document with basic styling.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
                         "markdown": {
-                            "type": "string"
+                            "type": "string",
+                            "description": "The markdown content to convert."
                         },
                         "output_path": {
-                            "type": "string"
+                            "type": "string",
+                            "description": "Local path where the HTML file should be saved."
                         }
                     },
                     "required": [
@@ -225,18 +258,21 @@
             },
             {
                 "name": "convert_to_md",
-                "description": "Export original Markdown content",
+                "description": "Export the provided content back to Markdown. Can be used for cleanup if 'harmonize' is enabled.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
                         "markdown": {
-                            "type": "string"
+                            "type": "string",
+                            "description": "The markdown content to export."
                         },
                         "harmonize": {
-                            "type": "boolean"
+                            "type": "boolean",
+                            "description": "Whether to apply standardization rules."
                         },
                         "output_path": {
-                            "type": "string"
+                            "type": "string",
+                            "description": "Local path where the markdown should be saved."
                         }
                     },
                     "required": [
