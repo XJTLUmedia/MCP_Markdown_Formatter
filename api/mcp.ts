@@ -41,19 +41,28 @@ const getBrowser = async () => {
     }
 };
 
-const server = new Server(
-    {
-        name: "markdown-formatter-mcp",
-        version: "1.0.0",
-    },
-    {
-        capabilities: {
-            tools: {},
-        },
+// Instance interface
+interface McpInstance {
+    server: Server;
+    transport: any; // StreamableHTTPServerTransport
+}
+
+// Global registry of active instances in this warm lambda
+const instances = new Map<string, McpInstance>();
+
+// Shared setup for all instances
+function zodSchemaToToolInput(schema: z.ZodType<any>): any {
+    const shape = (schema as any).shape;
+    const properties: any = {};
+    const required: string[] = [];
+    for (const key in shape) {
+        const field = shape[key];
+        const isOptional = field.isOptional?.() || field instanceof z.ZodOptional;
+        properties[key] = { type: "string" };
+        if (!isOptional) required.push(key);
     }
-);
-
-
+    return { type: "object", properties, required };
+}
 
 // Helper to handle output
 async function handleOutput(
@@ -105,209 +114,210 @@ async function handleOutput(
     }
 }
 
-function zodSchemaToToolInput(schema: z.ZodType<any>): any {
-    const shape = (schema as any).shape;
-    const properties: any = {};
-    const required: string[] = [];
-    for (const key in shape) {
-        const field = shape[key];
-        const isOptional = field.isOptional?.() || field instanceof z.ZodOptional;
-        properties[key] = { type: "string" };
-        if (!isOptional) required.push(key);
-    }
-    return { type: "object", properties, required };
+function setupServerHandlers(server: Server) {
+    server.setRequestHandler(ListToolsRequestSchema, async () => {
+        return {
+            tools: [
+                {
+                    name: "harmonize_markdown",
+                    description: "Standardize markdown syntax",
+                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), output_path: z.string().optional() })),
+                },
+                {
+                    name: "convert_to_txt",
+                    description: "Convert Markdown to Plain Text",
+                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), output_path: z.string().optional() })),
+                },
+                {
+                    name: "convert_to_rtf",
+                    description: "Convert Markdown to RTF",
+                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), output_path: z.string().optional() })),
+                },
+                {
+                    name: "convert_to_latex",
+                    description: "Convert Markdown to LaTeX",
+                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), output_path: z.string().optional() })),
+                },
+                {
+                    name: "convert_to_docx",
+                    description: "Convert Markdown to DOCX",
+                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), output_path: z.string().optional() })),
+                },
+                {
+                    name: "convert_to_pdf",
+                    description: "Convert Markdown to PDF",
+                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), output_path: z.string().optional() })),
+                },
+                {
+                    name: "convert_to_image",
+                    description: "Convert Markdown to PNG Image",
+                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), output_path: z.string().optional() })),
+                },
+                {
+                    name: "convert_to_csv",
+                    description: "Extract tables from Markdown to CSV",
+                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), output_path: z.string().optional() })),
+                },
+                {
+                    name: "convert_to_json",
+                    description: "Convert Markdown to JSON structure",
+                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), title: z.string().optional(), output_path: z.string().optional() })),
+                },
+                {
+                    name: "convert_to_xml",
+                    description: "Convert Markdown to XML",
+                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), title: z.string().optional(), output_path: z.string().optional() })),
+                },
+                {
+                    name: "convert_to_xlsx",
+                    description: "Convert Markdown tables to Excel",
+                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), output_path: z.string().optional() })),
+                },
+                {
+                    name: "convert_to_html",
+                    description: "Convert Markdown to HTML",
+                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), output_path: z.string().optional() })),
+                },
+                {
+                    name: "convert_to_md",
+                    description: "Export original Markdown content",
+                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), harmonize: z.boolean().optional(), output_path: z.string().optional() })),
+                },
+                {
+                    name: "generate_html",
+                    description: "Generate complete HTML document",
+                    inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), title: z.string().optional() })),
+                }
+            ],
+        };
+    });
+
+    server.setRequestHandler(CallToolRequestSchema, async (request) => {
+        try {
+            const { name, arguments: args } = request.params;
+            const markdown = (args as any).markdown;
+            const outputPath = (args as any).output_path;
+
+            if (!markdown) throw new Error("Markdown content is required");
+
+            if (name === "harmonize_markdown") {
+                const file = await unified().use(remarkParse).use(remarkGfm).use(remarkMath).use(remarkStringify, { bullet: '-', fence: '`', fences: true, incrementListMarker: true, listItemIndent: 'one' }).process(markdown);
+                return handleOutput(String(file), outputPath);
+            }
+
+            if (name === "convert_to_txt") return handleOutput(cleanMarkdownText(markdown), outputPath);
+            if (name === "convert_to_rtf") return handleOutput(parseMarkdownToRTF(markdown), outputPath);
+            if (name === "convert_to_latex") return handleOutput(parseMarkdownToLaTeX(markdown), outputPath);
+
+            if (name === "convert_to_docx") {
+                const elements = parseMarkdownToDocx(markdown);
+                const doc = new (await import("docx")).Document({ sections: [{ children: elements }] });
+                const buffer = await Packer.toBuffer(doc);
+                return handleOutput(buffer, outputPath, { format: 'docx', description: 'Word document' });
+            }
+
+            if (name === "convert_to_csv") return handleOutput(generateCSV(markdown), outputPath);
+            if (name === "convert_to_json") return handleOutput(generateJSON(markdown, (args as any).title), outputPath);
+            if (name === "convert_to_xml") return handleOutput(generateXML(markdown, (args as any).title), outputPath);
+            if (name === "convert_to_xlsx") return handleOutput(generateXLSXIndex(markdown), outputPath, { format: 'xlsx', description: 'Excel spreadsheet' });
+
+            if (name === "convert_to_html" || name === "convert_to_pdf" || name === "convert_to_image") {
+                const htmlFile = await unified().use(remarkParse).use(remarkGfm).use(remarkRehype).use(rehypeKatex).use(rehypeStringify).process(markdown);
+                const htmlDoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"><style>body { font-family: system-ui; padding: 40px; line-height: 1.6; max-width: 800px; margin: 0 auto; }</style></head><body>${String(htmlFile)}</body></html>`;
+
+                if (name === "convert_to_html") return handleOutput(htmlDoc, outputPath);
+
+                const browser = await getBrowser();
+                const page = await browser.newPage();
+                await page.setContent(htmlDoc);
+                let resultBuffer: Buffer;
+
+                if (name === "convert_to_pdf") {
+                    resultBuffer = Buffer.from(await page.pdf({ format: 'A4' }));
+                    await browser.close();
+                    return handleOutput(resultBuffer, outputPath, { format: 'pdf', description: 'PDF document' });
+                } else {
+                    resultBuffer = Buffer.from(await page.screenshot({ fullPage: true, encoding: 'binary' }));
+                    await browser.close();
+                    return handleOutput(resultBuffer, outputPath, { format: 'png', description: 'PNG image' });
+                }
+            }
+
+            if (name === "convert_to_md") {
+                if (!(args as any).harmonize) return handleOutput(markdown, outputPath);
+                const file = await unified().use(remarkParse).use(remarkGfm).use(remarkMath).use(remarkStringify, { bullet: '-', fence: '`', fences: true, incrementListMarker: true, listItemIndent: 'one' }).process(markdown);
+                return handleOutput(String(file), outputPath);
+            }
+
+            if (name === "generate_html") {
+                const htmlFile = await unified().use(remarkParse).use(remarkGfm).use(remarkRehype).use(rehypeKatex).use(rehypeStringify).process(markdown);
+                const htmlDoc = `<!DOCTYPE html><html><head><title>${(args as any).title || 'Doc'}</title></head><body>${String(htmlFile)}</body></html>`;
+                return { content: [{ type: "text", text: htmlDoc }] };
+            }
+
+            throw new Error(`Unknown tool: ${name}`);
+        } catch (error: any) {
+            return { content: [{ type: "text", text: `Error: ${error.message}` }], isError: true };
+        }
+    });
+
 }
-
-server.setRequestHandler(ListToolsRequestSchema, async () => {
-    return {
-        tools: [
-            {
-                name: "harmonize_markdown",
-                description: "Standardize markdown syntax",
-                inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), output_path: z.string().optional() })),
-            },
-            {
-                name: "convert_to_txt",
-                description: "Convert Markdown to Plain Text",
-                inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), output_path: z.string().optional() })),
-            },
-            {
-                name: "convert_to_rtf",
-                description: "Convert Markdown to RTF",
-                inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), output_path: z.string().optional() })),
-            },
-            {
-                name: "convert_to_latex",
-                description: "Convert Markdown to LaTeX",
-                inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), output_path: z.string().optional() })),
-            },
-            {
-                name: "convert_to_docx",
-                description: "Convert Markdown to DOCX",
-                inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), output_path: z.string().optional() })),
-            },
-            {
-                name: "convert_to_pdf",
-                description: "Convert Markdown to PDF",
-                inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), output_path: z.string().optional() })),
-            },
-            {
-                name: "convert_to_image",
-                description: "Convert Markdown to PNG Image",
-                inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), output_path: z.string().optional() })),
-            },
-            {
-                name: "convert_to_csv",
-                description: "Extract tables from Markdown to CSV",
-                inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), output_path: z.string().optional() })),
-            },
-            {
-                name: "convert_to_json",
-                description: "Convert Markdown to JSON structure",
-                inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), title: z.string().optional(), output_path: z.string().optional() })),
-            },
-            {
-                name: "convert_to_xml",
-                description: "Convert Markdown to XML",
-                inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), title: z.string().optional(), output_path: z.string().optional() })),
-            },
-            {
-                name: "convert_to_xlsx",
-                description: "Convert Markdown tables to Excel",
-                inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), output_path: z.string().optional() })),
-            },
-            {
-                name: "convert_to_html",
-                description: "Convert Markdown to HTML",
-                inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), output_path: z.string().optional() })),
-            },
-            {
-                name: "convert_to_md",
-                description: "Export original Markdown content",
-                inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), harmonize: z.boolean().optional(), output_path: z.string().optional() })),
-            },
-            {
-                name: "generate_html",
-                description: "Generate complete HTML document",
-                inputSchema: zodSchemaToToolInput(z.object({ markdown: z.string(), title: z.string().optional() })),
-            }
-        ],
-    };
-});
-
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    try {
-        const { name, arguments: args } = request.params;
-        const markdown = (args as any).markdown;
-        const outputPath = (args as any).output_path;
-
-        if (!markdown) throw new Error("Markdown content is required");
-
-        if (name === "harmonize_markdown") {
-            const file = await unified().use(remarkParse).use(remarkGfm).use(remarkMath).use(remarkStringify, { bullet: '-', fence: '`', fences: true, incrementListMarker: true, listItemIndent: 'one' }).process(markdown);
-            return handleOutput(String(file), outputPath);
-        }
-
-        if (name === "convert_to_txt") return handleOutput(cleanMarkdownText(markdown), outputPath);
-        if (name === "convert_to_rtf") return handleOutput(parseMarkdownToRTF(markdown), outputPath);
-        if (name === "convert_to_latex") return handleOutput(parseMarkdownToLaTeX(markdown), outputPath);
-
-        if (name === "convert_to_docx") {
-            const elements = parseMarkdownToDocx(markdown);
-            const doc = new (await import("docx")).Document({ sections: [{ children: elements }] });
-            const buffer = await Packer.toBuffer(doc);
-            return handleOutput(buffer, outputPath, { format: 'docx', description: 'Word document' });
-        }
-
-        if (name === "convert_to_csv") return handleOutput(generateCSV(markdown), outputPath);
-        if (name === "convert_to_json") return handleOutput(generateJSON(markdown, (args as any).title), outputPath);
-        if (name === "convert_to_xml") return handleOutput(generateXML(markdown, (args as any).title), outputPath);
-        if (name === "convert_to_xlsx") return handleOutput(generateXLSXIndex(markdown), outputPath, { format: 'xlsx', description: 'Excel spreadsheet' });
-
-        if (name === "convert_to_html" || name === "convert_to_pdf" || name === "convert_to_image") {
-            const htmlFile = await unified().use(remarkParse).use(remarkGfm).use(remarkRehype).use(rehypeKatex).use(rehypeStringify).process(markdown);
-            const htmlDoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"><style>body { font-family: system-ui; padding: 40px; line-height: 1.6; max-width: 800px; margin: 0 auto; }</style></head><body>${String(htmlFile)}</body></html>`;
-
-            if (name === "convert_to_html") return handleOutput(htmlDoc, outputPath);
-
-            const browser = await getBrowser();
-            const page = await browser.newPage();
-            await page.setContent(htmlDoc);
-            let resultBuffer: Buffer;
-
-            if (name === "convert_to_pdf") {
-                resultBuffer = Buffer.from(await page.pdf({ format: 'A4' }));
-                await browser.close();
-                return handleOutput(resultBuffer, outputPath, { format: 'pdf', description: 'PDF document' });
-            } else {
-                resultBuffer = Buffer.from(await page.screenshot({ fullPage: true, encoding: 'binary' }));
-                await browser.close();
-                return handleOutput(resultBuffer, outputPath, { format: 'png', description: 'PNG image' });
-            }
-        }
-
-        if (name === "convert_to_md") {
-            if (!(args as any).harmonize) return handleOutput(markdown, outputPath);
-            const file = await unified().use(remarkParse).use(remarkGfm).use(remarkMath).use(remarkStringify, { bullet: '-', fence: '`', fences: true, incrementListMarker: true, listItemIndent: 'one' }).process(markdown);
-            return handleOutput(String(file), outputPath);
-        }
-
-        if (name === "generate_html") {
-            const htmlFile = await unified().use(remarkParse).use(remarkGfm).use(remarkRehype).use(rehypeKatex).use(rehypeStringify).process(markdown);
-            const htmlDoc = `<!DOCTYPE html><html><head><title>${(args as any).title || 'Doc'}</title></head><body>${String(htmlFile)}</body></html>`;
-            return { content: [{ type: "text", text: htmlDoc }] };
-        }
-
-        throw new Error(`Unknown tool: ${name}`);
-    } catch (error: any) {
-        return { content: [{ type: "text", text: `Error: ${error.message}` }], isError: true };
-    }
-});
 
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 
-// Keep server and transport references at the top level to benefit from Vercel's warm starts
-let transport: StreamableHTTPServerTransport | null = null;
+async function getOrCreateInstance(sessionId?: string): Promise<McpInstance> {
+    if (sessionId && instances.has(sessionId)) {
+        console.log(`[MCP] Reusing instance for session: ${sessionId}`);
+        return instances.get(sessionId)!;
+    }
+
+    console.log(`[MCP] Creating new instance${sessionId ? ' for session ' + sessionId : ''}`);
+    const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => sessionId || Math.random().toString(36).substring(2, 15),
+    });
+
+    const server = new Server(
+        { name: "markdown-formatter-mcp", version: "1.0.0" },
+        { capabilities: { tools: {} } }
+    );
+
+    setupServerHandlers(server);
+    await server.connect(transport);
+
+    const instance = { server, transport };
+
+    // Register handlers to track this instance by ID
+    (transport as any)._webStandardTransport.onsessioninitialized = (finalId: string) => {
+        console.log(`[MCP] Session initialized: ${finalId}`);
+        instances.set(finalId, instance);
+    };
+    (transport as any)._webStandardTransport.onsessionclosed = (closedId: string) => {
+        console.log(`[MCP] Session closed: ${closedId}`);
+        instances.delete(closedId);
+    };
+
+    return instance;
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Add CORS and Streaming headers
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, DELETE');
     res.setHeader('Access-Control-Allow-Headers', '*');
     res.setHeader('Access-Control-Expose-Headers', '*');
-    res.setHeader('X-Accel-Buffering', 'no'); // Disable buffering for SSE streaming
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
-    res.setHeader('Cache-Control', 'no-cache');
 
     if (req.method === 'OPTIONS') {
         res.status(200).end();
         return;
     }
 
-    // Logging for debugging
-    console.log(`[MCP] ${req.method} ${req.url}`);
-    console.log(`[MCP] Headers: ${JSON.stringify(req.headers)}`);
-    if (req.query) console.log(`[MCP] Query: ${JSON.stringify(req.query)}`);
+    const sessionId = (req.query.sessionId as string) || (req.headers['mcp-session-id'] as string);
+    console.log(`[MCP] ${req.method} ${req.url} | Session: ${sessionId || 'none'}`);
 
-    // Lazy initialization of transport and server connection
-    if (!transport) {
-        try {
-            console.log("[MCP] Initializing transport (stateless)...");
-            transport = new StreamableHTTPServerTransport({
-                // Stateless mode is more reliable on Vercel as it doesn't require 
-                // subsequent POST requests to hit the same lambda instance.
-                sessionIdGenerator: undefined,
-            });
-            await server.connect(transport);
-            console.log("[MCP] Server connected to transport");
-        } catch (error) {
-            console.error("[MCP] Failed to initialize MCP server:", error);
-            res.status(500).json({ error: "Internal Server Error during initialization" });
-            return;
-        }
-    }
-
-    // Friendly message for browser visits (standard GET without event-stream header)
+    // Help page for browser GETs
     const isEventStream =
         req.headers.accept?.includes('text/event-stream') ||
         req.headers['mcp-protocol-version'] ||
@@ -336,6 +346,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                         <span class="status"><span class="dot"></span> Online</span>
                     </div>
                     <p>This is a Model Context Protocol (MCP) server endpoint running as a Vercel Serverless Function.</p>
+                    <p>Current active sessions in this node: ${instances.size}</p>
                     
                     <h2 style="font-size: 1.125rem; margin-top: 32px; color: #94a3b8;">Setup Instructions</h2>
                     <p>To use this server, add it to your <code>claude_desktop_config.json</code>:</p>
@@ -355,10 +366,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
-        // Handle request via SDK transport
-        // Ensure body is only passed for POST/PUT requests
+        const instance = await getOrCreateInstance(sessionId);
+
+        // Prevent 409 Conflict: If this is a new GET request for an existing session, 
+        // close the previous stream first.
+        if (req.method === 'GET' && isEventStream) {
+            instance.transport.closeStandaloneSSEStream();
+        }
+
         const body = (req.method === 'POST' || req.method === 'PUT') ? req.body : undefined;
-        await transport.handleRequest(req, res, body);
+        await instance.transport.handleRequest(req, res, body);
     } catch (error: any) {
         console.error("[MCP] Error handling request:", error);
         if (!res.headersSent) {
