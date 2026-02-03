@@ -302,22 +302,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('Content-Type', 'application/json');
 
-    if (req.method === 'OPTIONS') {
-        res.status(200).end();
-        return;
-    }
-
-    const providedSessionId = (req.query.sessionId as string) || (req.headers['mcp-session-id'] as string);
-    const sessionId = providedSessionId || `s_${Math.random().toString(36).substring(2, 10)}`;
-    res.setHeader('mcp-session-id', sessionId);
-
-    const isEventStream =
-        req.headers.accept?.includes('text/event-stream') ||
-        req.headers['mcp-protocol-version'] ||
-        (req.query.sessionId && req.method === 'GET');
-
-    // Handle server-card.json if requested directly at this endpoint
-    if (req.url?.includes('server-card.json')) {
+    // 1. High-priority: Handle server-card.json for Smithery discovery
+    if (req.url?.includes('server-card.json') || req.url?.includes('.well-known/mcp')) {
         const serverCard = {
             mcpV1: {
                 tools: [
@@ -337,9 +323,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 ]
             }
         };
-        res.status(200).json(serverCard);
-        return;
+        return res.status(200).json(serverCard);
     }
+
+    const providedSessionId = (req.query.sessionId as string) || (req.headers['mcp-session-id'] as string);
+    const sessionId = providedSessionId || `s_${Math.random().toString(36).substring(2, 10)}`;
+    res.setHeader('mcp-session-id', sessionId);
+
+    const isEventStream =
+        req.headers.accept?.includes('text/event-stream') ||
+        req.headers['mcp-protocol-version'] ||
+        (req.query.sessionId && req.method === 'GET');
 
     if (req.method === 'GET' && !isEventStream) {
         res.status(200).setHeader('Content-Type', 'text/html').send(`
@@ -386,22 +380,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const body = (req.method === 'POST' || req.method === 'PUT') ? req.body : undefined;
 
-        // Vercel Stateless Hack:
-        // If this is a POST to a new instance and it's NOT an initialize request,
-        // force the server to think it's initialized to avoid the protocol error.
-        if (req.method === 'POST' && instance.isNew && body?.method !== 'initialize') {
+        // Force initialization for all methods if the instance is new, 
+        // because in a serverless environment we can't rely on the client
+        // hitting the same instance for the 'initialize' message.
+        if (instance.isNew) {
             console.log(`[MCP] Cold Start/Instance Migration detected for session ${sessionId}. Forcing initialization.`);
-            (instance.server as any)._initialized = true;
+            // @ts-ignore - access private property
+            instance.server._initialized = true;
         }
 
         // Build absolute URL for the Web Request
         const protocol = req.headers['x-forwarded-proto'] || 'http';
-        const url = new URL(req.url!, `${protocol}://${req.headers.host}`);
+        const host = req.headers.host || 'localhost';
+        const url = new URL(req.url!, `${protocol}://${host}`);
+
+        // Construct headers correctly
+        const headers = new Headers();
+        Object.entries(req.headers).forEach(([k, v]) => {
+            if (v) {
+                if (Array.isArray(v)) v.forEach(val => headers.append(k, val));
+                else headers.set(k, v as string);
+            }
+        });
 
         const webRequest = new Request(url, {
             method: req.method,
-            headers: req.headers as any,
-            body: body ? JSON.stringify(body) : undefined
+            headers: headers,
+            body: body ? (typeof body === 'string' ? body : JSON.stringify(body)) : undefined
         });
 
         const webResponse = await instance.transport.handleRequest(webRequest);
