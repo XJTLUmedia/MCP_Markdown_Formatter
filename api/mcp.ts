@@ -314,25 +314,54 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         req.query.sessionId;
 
     if (req.method === 'GET' && !isEventStream) {
-        res.status(200).setHeader('Content-Type', 'text/html').send(`...Help HTML...`);
+        res.status(200).setHeader('Content-Type', 'text/html').send(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Markdown Formatter MCP</title>
+                <style>
+                    body { font-family: system-ui, -apple-system, sans-serif; padding: 40px; line-height: 1.6; max-width: 700px; margin: 0 auto; background: #0f172a; color: #f8fafc; }
+                    .card { background: #1e293b; padding: 24px; border-radius: 12px; border: 1px solid #334155; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+                    pre { background: #0f172a; padding: 16px; border-radius: 8px; overflow-x: auto; color: #38bdf8; font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; }
+                    .status { display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px; border-radius: 99px; background: #064e3b; color: #34d399; font-size: 0.8125rem; font-weight: 600; }
+                    .dot { width: 8px; height: 8px; background: #34d399; border-radius: 50%; box-shadow: 0 0 8px #34d399; }
+                    h1 { margin: 0; font-size: 1.5rem; letter-spacing: -0.025em; }
+                    code { color: #f472b6; }
+                </style>
+            </head>
+            <body>
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                        <h1>Markdown Formatter MCP</h1>
+                        <span class="status"><span class="dot"></span> Online</span>
+                    </div>
+                    <p>This is a Model Context Protocol (MCP) server endpoint running as a Vercel Serverless Function.</p>
+                    <p>Active instances in this node: ${instances.size}</p>
+                    
+                    <h2 style="font-size: 1.125rem; margin-top: 32px; color: #94a3b8;">Setup Instructions</h2>
+                    <p>To use this server, add it to your <code>claude_desktop_config.json</code> (or typical MCP client):</p>
+                    <pre>https://ai-answer-copier.vercel.app/api/mcp</pre>
+                </div>
+            </body>
+            </html>
+        `);
         return;
     }
 
     try {
         const instance = await getOrCreateInstance(sessionId);
 
+        // Anti-409: Close existing stream if this is a new GET for the same session
         if (req.method === 'GET' && isEventStream) {
             instance.transport.closeStandaloneSSEStream();
-
-            // Send immediate 200 OK headers to fix TLS/Handshake timing out on Vercel
-            res.status(200).setHeader('Content-Type', 'text/event-stream');
-            res.write(': heartbeat\n\n');
         }
 
         const body = (req.method === 'POST' || req.method === 'PUT') ? req.body : undefined;
 
-        // Manual bridge to WebStandard API since Vercel Request/Response are slightly different
-        const url = new URL(req.url!, `http://${req.headers.host}`);
+        // Build absolute URL for the Web Request
+        const protocol = req.headers['x-forwarded-proto'] || 'http';
+        const url = new URL(req.url!, `${protocol}://${req.headers.host}`);
+
         const webRequest = new Request(url, {
             method: req.method,
             headers: req.headers as any,
@@ -341,22 +370,62 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const webResponse = await instance.transport.handleRequest(webRequest);
 
-        // Copy headers and status
-        res.status(webResponse.status);
-        webResponse.headers.forEach((v: string, k: string) => res.setHeader(k, v));
-
+        // Handle stream piping
         if (webResponse.body) {
-            const reader = webResponse.body.getReader();
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                res.write(value);
+            // For SSE, we MUST send headers immediately to satisfy Vercel/proxies
+            const contentType = webResponse.headers.get('Content-Type') || '';
+            const isSseResponse = contentType.includes('text/event-stream');
+
+            if (isSseResponse) {
+                res.status(200);
+                res.setHeader('Content-Type', 'text/event-stream');
+                res.setHeader('Cache-Control', 'no-cache, no-transform');
+                res.setHeader('Connection', 'keep-alive');
+                res.setHeader('X-Accel-Buffering', 'no');
+                res.write(': heartbeat\n\n'); // Initial handshake to prevent timeout
+            } else {
+                res.status(webResponse.status);
+                webResponse.headers.forEach((v: string, k: string) => {
+                    if (!res.getHeader(k)) res.setHeader(k, v);
+                });
             }
+
+            const reader = webResponse.body.getReader();
+            try {
+                // Keep-alive timer for long SSE connections on serverless
+                let keepAlive: NodeJS.Timeout | undefined;
+                if (isSseResponse) {
+                    keepAlive = setInterval(() => {
+                        res.write(': keep-alive\n\n');
+                    }, 15000);
+                    res.on('close', () => clearInterval(keepAlive));
+                }
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    res.write(value);
+                }
+            } finally {
+                reader.releaseLock();
+            }
+        } else {
+            // Standard JSON/Error response
+            res.status(webResponse.status);
+            webResponse.headers.forEach((v: string, k: string) => {
+                if (!res.getHeader(k)) res.setHeader(k, v);
+            });
+            const text = await webResponse.text();
+            res.send(text);
         }
         res.end();
     } catch (error: any) {
-        console.error("[MCP] Error:", error);
-        if (!res.headersSent) res.status(500).json({ error: error.message });
+        console.error("[MCP] Execution error:", error);
+        if (!res.headersSent) {
+            res.status(500).json({ error: error.message });
+        } else {
+            res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+            res.end();
+        }
     }
 }
-
