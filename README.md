@@ -21,6 +21,8 @@ Online HTML version
 <img width="1327" height="732" alt="live_demo1" src="https://github.com/user-attachments/assets/ed6b9b14-2778-45c7-a27d-c3cc8afd9cd9" />
 <img width="1170" height="831" alt="live_demo2" src="https://github.com/user-attachments/assets/98c81708-e1e7-45e4-b27c-44450f51c017" />
 
+Using MCP tool 
+<img width="1436" height="491" alt="MCP server" src="https://github.com/user-attachments/assets/882ba600-6a33-41f7-9fdb-ff56e6fa346d" />
 
 ## The Problem: The "Final Mile" Friction
 
