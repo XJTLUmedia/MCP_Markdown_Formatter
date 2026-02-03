@@ -3,6 +3,10 @@
         {
             "source": "/mcp",
             "destination": "/api/mcp"
+        },
+        {
+            "source": "/.well-known/mcp/server-card.json",
+            "destination": "/api/mcp"
         }
     ]
 }

@@ -45,6 +45,7 @@ const getBrowser = async () => {
 interface McpInstance {
     server: Server;
     transport: any; // StreamableHTTPServerTransport
+    isNew: boolean;
 }
 
 // Global registry of active instances in this warm lambda
@@ -267,7 +268,9 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 
 async function getOrCreateInstance(sessionId: string): Promise<McpInstance> {
     if (instances.has(sessionId)) {
-        return instances.get(sessionId)!;
+        const instance = instances.get(sessionId)!;
+        instance.isNew = false;
+        return instance;
     }
 
     const transport = new WebStandardStreamableHTTPServerTransport({
@@ -282,7 +285,7 @@ async function getOrCreateInstance(sessionId: string): Promise<McpInstance> {
     setupServerHandlers(server);
     await server.connect(transport);
 
-    const instance = { server, transport };
+    const instance = { server, transport, isNew: true };
     instances.set(sessionId, instance);
 
     return instance;
@@ -311,7 +314,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const isEventStream =
         req.headers.accept?.includes('text/event-stream') ||
         req.headers['mcp-protocol-version'] ||
-        req.query.sessionId;
+        (req.query.sessionId && req.method === 'GET');
+
+    // Handle server-card.json if requested directly at this endpoint
+    if (req.url?.includes('server-card.json')) {
+        const serverCard = {
+            mcpV1: {
+                tools: [
+                    { name: "harmonize_markdown", description: "Standardize markdown syntax" },
+                    { name: "convert_to_txt", description: "Convert Markdown to Plain Text" },
+                    { name: "convert_to_rtf", description: "Convert Markdown to RTF" },
+                    { name: "convert_to_latex", description: "Convert Markdown to LaTeX" },
+                    { name: "convert_to_docx", description: "Convert Markdown to DOCX" },
+                    { name: "convert_to_pdf", description: "Convert Markdown to PDF" },
+                    { name: "convert_to_image", description: "Convert Markdown to PNG Image" },
+                    { name: "convert_to_csv", description: "Extract tables from Markdown to CSV" },
+                    { name: "convert_to_json", description: "Convert Markdown to JSON structure" },
+                    { name: "convert_to_xml", description: "Convert Markdown to XML" },
+                    { name: "convert_to_xlsx", description: "Convert Markdown tables to Excel" },
+                    { name: "convert_to_html", description: "Convert Markdown to HTML" },
+                    { name: "convert_to_md", description: "Export original Markdown content" }
+                ]
+            }
+        };
+        res.status(200).json(serverCard);
+        return;
+    }
 
     if (req.method === 'GET' && !isEventStream) {
         res.status(200).setHeader('Content-Type', 'text/html').send(`
@@ -358,6 +386,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const body = (req.method === 'POST' || req.method === 'PUT') ? req.body : undefined;
 
+        // Vercel Stateless Hack:
+        // If this is a POST to a new instance and it's NOT an initialize request,
+        // force the server to think it's initialized to avoid the protocol error.
+        if (req.method === 'POST' && instance.isNew && body?.method !== 'initialize') {
+            console.log(`[MCP] Cold Start/Instance Migration detected for session ${sessionId}. Forcing initialization.`);
+            (instance.server as any)._initialized = true;
+        }
+
         // Build absolute URL for the Web Request
         const protocol = req.headers['x-forwarded-proto'] || 'http';
         const url = new URL(req.url!, `${protocol}://${req.headers.host}`);
@@ -378,11 +414,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
             if (isSseResponse) {
                 res.status(200);
+                // Copy all headers from the SDK response (including mcp-session-id)
+                webResponse.headers.forEach((v: string, k: string) => {
+                    res.setHeader(k, v);
+                });
+                // Force headers that are critical for Vercel/proxies
                 res.setHeader('Content-Type', 'text/event-stream');
                 res.setHeader('Cache-Control', 'no-cache, no-transform');
                 res.setHeader('Connection', 'keep-alive');
                 res.setHeader('X-Accel-Buffering', 'no');
-                res.write(': heartbeat\n\n'); // Initial handshake to prevent timeout
+                res.write(': heartbeat\n\n'); // Initial handshake
             } else {
                 res.status(webResponse.status);
                 webResponse.headers.forEach((v: string, k: string) => {

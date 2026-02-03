@@ -1,0 +1,249 @@
+{
+    "mcpV1": {
+        "tools": [
+            {
+                "name": "harmonize_markdown",
+                "description": "Standardize markdown syntax",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "markdown": {
+                            "type": "string"
+                        },
+                        "output_path": {
+                            "type": "string"
+                        }
+                    },
+                    "required": [
+                        "markdown"
+                    ]
+                }
+            },
+            {
+                "name": "convert_to_txt",
+                "description": "Convert Markdown to Plain Text",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "markdown": {
+                            "type": "string"
+                        },
+                        "output_path": {
+                            "type": "string"
+                        }
+                    },
+                    "required": [
+                        "markdown"
+                    ]
+                }
+            },
+            {
+                "name": "convert_to_rtf",
+                "description": "Convert Markdown to RTF",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "markdown": {
+                            "type": "string"
+                        },
+                        "output_path": {
+                            "type": "string"
+                        }
+                    },
+                    "required": [
+                        "markdown"
+                    ]
+                }
+            },
+            {
+                "name": "convert_to_latex",
+                "description": "Convert Markdown to LaTeX",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "markdown": {
+                            "type": "string"
+                        },
+                        "output_path": {
+                            "type": "string"
+                        }
+                    },
+                    "required": [
+                        "markdown"
+                    ]
+                }
+            },
+            {
+                "name": "convert_to_docx",
+                "description": "Convert Markdown to DOCX",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "markdown": {
+                            "type": "string"
+                        },
+                        "output_path": {
+                            "type": "string"
+                        }
+                    },
+                    "required": [
+                        "markdown"
+                    ]
+                }
+            },
+            {
+                "name": "convert_to_pdf",
+                "description": "Convert Markdown to PDF",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "markdown": {
+                            "type": "string"
+                        },
+                        "output_path": {
+                            "type": "string"
+                        }
+                    },
+                    "required": [
+                        "markdown"
+                    ]
+                }
+            },
+            {
+                "name": "convert_to_image",
+                "description": "Convert Markdown to PNG Image",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "markdown": {
+                            "type": "string"
+                        },
+                        "output_path": {
+                            "type": "string"
+                        }
+                    },
+                    "required": [
+                        "markdown"
+                    ]
+                }
+            },
+            {
+                "name": "convert_to_csv",
+                "description": "Extract tables from Markdown to CSV",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "markdown": {
+                            "type": "string"
+                        },
+                        "output_path": {
+                            "type": "string"
+                        }
+                    },
+                    "required": [
+                        "markdown"
+                    ]
+                }
+            },
+            {
+                "name": "convert_to_json",
+                "description": "Convert Markdown to JSON structure",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "markdown": {
+                            "type": "string"
+                        },
+                        "title": {
+                            "type": "string"
+                        },
+                        "output_path": {
+                            "type": "string"
+                        }
+                    },
+                    "required": [
+                        "markdown"
+                    ]
+                }
+            },
+            {
+                "name": "convert_to_xml",
+                "description": "Convert Markdown to XML",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "markdown": {
+                            "type": "string"
+                        },
+                        "title": {
+                            "type": "string"
+                        },
+                        "output_path": {
+                            "type": "string"
+                        }
+                    },
+                    "required": [
+                        "markdown"
+                    ]
+                }
+            },
+            {
+                "name": "convert_to_xlsx",
+                "description": "Convert Markdown tables to Excel",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "markdown": {
+                            "type": "string"
+                        },
+                        "output_path": {
+                            "type": "string"
+                        }
+                    },
+                    "required": [
+                        "markdown"
+                    ]
+                }
+            },
+            {
+                "name": "convert_to_html",
+                "description": "Convert Markdown to HTML",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "markdown": {
+                            "type": "string"
+                        },
+                        "output_path": {
+                            "type": "string"
+                        }
+                    },
+                    "required": [
+                        "markdown"
+                    ]
+                }
+            },
+            {
+                "name": "convert_to_md",
+                "description": "Export original Markdown content",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "markdown": {
+                            "type": "string"
+                        },
+                        "harmonize": {
+                            "type": "boolean"
+                        },
+                        "output_path": {
+                            "type": "string"
+                        }
+                    },
+                    "required": [
+                        "markdown"
+                    ]
+                }
+            }
+        ]
+    }
+}
