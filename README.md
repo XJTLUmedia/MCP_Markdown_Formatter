@@ -25,8 +25,9 @@ Test MCP tool in inspector
 <img width="1436" height="491" alt="MCP server" src="https://github.com/user-attachments/assets/882ba600-6a33-41f7-9fdb-ff56e6fa346d" />
 
 Use actual MCP instance
-<img width="950" height="608" alt="MCP2" src="https://github.com/user-attachments/assets/0dd0c695-1c5a-41ab-9acd-f071b683e3a2" />
 <img width="925" height="567" alt="MCP1" src="https://github.com/user-attachments/assets/0edb36da-c048-4062-84a7-5521ad7b0f7f" />
+<img width="950" height="608" alt="MCP2" src="https://github.com/user-attachments/assets/0dd0c695-1c5a-41ab-9acd-f071b683e3a2" />
+
 
 ## The Problem: The "Final Mile" Friction
 
