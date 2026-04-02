@@ -150,11 +150,27 @@ npm run build
 
 ### 🔌 How to Bind to AI Tools (MCP)
 
+<img width="805" height="621" alt="image" src="https://github.com/user-attachments/assets/b012a055-b595-446a-9c12-934239f3d63b" />
+
 To use these 14 tools directly inside **MCP like Claude**, edit your configuration file:
 
 1. Open `%APPDATA%\Claude\claude_desktop_config.json` (Windows) or `~/Library/Application Support/Claude/claude_desktop_config.json` (Mac).
 2. Add the following entry to the `mcpServers` list:
 
+#### Npm version
+
+```json
+{
+  "mcpServers": {
+"ai-answer-copier": {
+      "command": "npx",
+      "args": ["-y", "@xjtlumedia/markdown-mcp-server"]
+    }
+  }
+}
+```
+
+#### DIY version
 ```json
 {
   "mcpServers": {
@@ -168,6 +184,8 @@ To use these 14 tools directly inside **MCP like Claude**, edit your configurati
 }
 ```
 *Note: Replace `YOUR_PATH_TO_PROJECT` with the absolute path to this folder.*
+
+#### Online version
 
 You can use live demo instance on vercel using
 
