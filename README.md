@@ -141,12 +141,24 @@ npm install
 npm run dev
 ```
 
+Use in production environment 
+
 ```bash
 # Use MCP server
 cd mcp-server
 npm install
 npm run build
+npm run preview
 ```
+
+If you choose to deploy this using npm in your local computer
+
+Simply visit your vite at port 5173 [AI_answer_copier](https://localhost:5173)
+
+or you can use the demo or online version stated above
+
+---
+
 
 ### 🔌 How to Bind to AI Tools (MCP)
 
@@ -195,11 +207,6 @@ npx @modelcontextprotocol/inspector https://ai-answer-copier.vercel.app/api/mcp
 
 3. **Restart Claude Desktop.** You will now see a 🔌 icon and all 14 tools (DOCX, PDF, XLSX, etc.) will be available for the AI to use automatically.
 
-### For Educators
-
-Simply visit your vite at port 5173 [AI_answer_copier](https://localhost:5173)
-
----
 
 ## Contributing
 
