@@ -11,6 +11,9 @@ Direct Pipeline: Ask the AI: "Generate 10 physics questions and export them to m
 
 Automated Workflow: Bridge the gap between LLM reasoning and local file generation.
 
+<img width="1018" height="480" alt="image" src="https://github.com/user-attachments/assets/da33b251-f9fe-4bd5-941f-cb92f42350b9" />
+
+npm link: https://www.npmjs.com/package/@xjtlumedia/markdown-mcp-server
 
 ### Live demo
 
