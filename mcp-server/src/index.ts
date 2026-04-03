@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
@@ -10,9 +11,10 @@ import remarkStringify from 'remark-stringify';
 import remarkRehype from 'remark-rehype';
 import rehypeKatex from 'rehype-katex';
 import rehypeStringify from 'rehype-stringify';
-import puppeteer from 'puppeteer';
+import puppeteer from 'puppeteer-core';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import * as os from 'os';
 import {
     stripMarkdown,
     parseMarkdownToRTF,
@@ -23,8 +25,58 @@ import {
     generateXML,
     generateXLSXIndex,
     cleanMarkdownText
-} from "../../src/utils/core-exports.js";
+} from "./core-exports.js";
 import { Packer } from "docx";
+
+// Find Chrome/Chromium executable on the system
+async function findChrome(): Promise<string> {
+    // Docker / CI: honour explicit env var
+    const envPath = process.env['PUPPETEER_EXECUTABLE_PATH'];
+    if (envPath) {
+        try { await fs.access(envPath); return envPath; } catch { /* fall through */ }
+    }
+
+    const platform = os.platform();
+    const candidates: string[] = [];
+    
+    if (platform === 'win32') {
+        const programFiles = process.env['PROGRAMFILES'] || 'C:\\Program Files';
+        const programFilesX86 = process.env['PROGRAMFILES(X86)'] || 'C:\\Program Files (x86)';
+        const localAppData = process.env['LOCALAPPDATA'] || '';
+        candidates.push(
+            path.join(programFiles, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+            path.join(programFilesX86, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+            path.join(localAppData, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+            path.join(programFiles, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+            path.join(programFilesX86, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+        );
+    } else if (platform === 'darwin') {
+        candidates.push(
+            '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+            '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+            '/Applications/Chromium.app/Contents/MacOS/Chromium',
+        );
+    } else {
+        candidates.push(
+            '/usr/bin/google-chrome',
+            '/usr/bin/google-chrome-stable',
+            '/usr/bin/chromium',
+            '/usr/bin/chromium-browser',
+            '/snap/bin/chromium',
+        );
+    }
+
+    for (const candidate of candidates) {
+        try {
+            await fs.access(candidate);
+            return candidate;
+        } catch { /* not found, try next */ }
+    }
+    throw new Error(
+        'No Chrome/Chromium/Edge browser found. PDF and PNG export require a Chromium-based browser. ' +
+        'Please install Google Chrome, Microsoft Edge, or Chromium.'
+    );
+}
 
 const server = new Server(
     {
@@ -330,7 +382,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 return handleOutput(htmlDoc, outputPath);
             }
 
-            const browser = await puppeteer.launch({ headless: true });
+            const browser = await puppeteer.launch({ headless: true, executablePath: await findChrome() });
             const page = await browser.newPage();
             await page.setContent(htmlDoc);
 

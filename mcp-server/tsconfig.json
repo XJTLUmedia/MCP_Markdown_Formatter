@@ -8,15 +8,14 @@
             "DOM"
         ],
         "outDir": "./dist",
-        "rootDir": "..",
+        "rootDir": "./src",
         "strict": true,
         "esModuleInterop": true,
         "skipLibCheck": true,
         "forceConsistentCasingInFileNames": true
     },
     "include": [
-        "src/**/*",
-        "../src/utils/core-exports.ts"
+        "src/**/*"
     ],
     "exclude": [
         "node_modules",

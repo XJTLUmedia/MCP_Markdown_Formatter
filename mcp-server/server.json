@@ -1,0 +1,20 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.XJTLUmedia/markdown-formatter",
+  "description": "AI Answer Copier — Convert Markdown to PDF, DOCX, HTML, LaTeX, CSV, JSON, XML, XLSX, RTF, PNG",
+  "repository": {
+    "url": "https://github.com/XJTLUmedia/AI_answer_copier",
+    "source": "github"
+  },
+  "version": "1.0.5",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@xjtlumedia/markdown-mcp-server",
+      "version": "1.0.5",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}

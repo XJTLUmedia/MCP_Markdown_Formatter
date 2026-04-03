@@ -1,19 +1,57 @@
 {
-    "name": "markdown-mcp-server",
-    "version": "1.0.0",
-    "description": "MCP Server for Markdown Processing and Exporting",
+    "name": "@xjtlumedia/markdown-mcp-server",
+    "version": "1.0.5",
+    "description": "AI Answer Copier — MCP Server that converts Markdown to 14 formats: PDF, DOCX, HTML, LaTeX, CSV, JSON, XML, XLSX, RTF, PNG and more. Built for educators and developers.",
+    "mcpName": "io.github.XJTLUmedia/markdown-formatter",
     "type": "module",
+    "main": "dist/index.js",
+    "bin": {
+        "markdown-mcp-server": "dist/index.js"
+    },
+    "homepage": "https://ai-answer-copier.vercel.app",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/XJTLUmedia/AI_answer_copier.git"
+    },
+    "keywords": [
+        "mcp",
+        "model-context-protocol",
+        "markdown",
+        "converter",
+        "exporter",
+        "ai-answer-copier",
+        "pdf",
+        "docx",
+        "latex",
+        "html",
+        "csv",
+        "json",
+        "xml",
+        "xlsx",
+        "rtf",
+        "png",
+        "education",
+        "quiz",
+        "kahoot",
+        "quizizz",
+        "lms",
+        "claude",
+        "copilot",
+        "ai-tools"
+    ],
+    "author": "XJTLUmedia",
+    "license": "MIT",
     "scripts": {
-        "start": "node dist/mcp-server/src/index.js",
+        "start": "node dist/index.js",
         "dev": "tsx src/index.ts",
         "build": "tsc",
+        "prepublishOnly": "npm run build",
         "inspector": "npx @modelcontextprotocol/inspector"
     },
     "dependencies": {
         "@modelcontextprotocol/sdk": "^0.6.0",
-        "@types/node": "^20.11.0",
         "docx": "^9.5.1",
-        "puppeteer": "^23.0.0",
+        "puppeteer-core": "^23.11.1",
         "rehype-katex": "^7.0.0",
         "rehype-parse": "^9.0.0",
         "rehype-stringify": "^10.0.0",
@@ -22,10 +60,13 @@
         "remark-parse": "^11.0.0",
         "remark-rehype": "^11.1.0",
         "remark-stringify": "^11.0.0",
-        "tsx": "^4.7.1",
-        "typescript": "^5.3.3",
         "unified": "^11.0.5",
         "xlsx": "^0.18.5",
         "zod": "^3.23.8"
+    },
+    "devDependencies": {
+        "@types/node": "^20.11.0",
+        "tsx": "^4.7.1",
+        "typescript": "^5.3.3"
     }
 }

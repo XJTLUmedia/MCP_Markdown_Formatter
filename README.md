@@ -3,6 +3,9 @@
 ### *Turn "AI Noise" into "Classroom Ready" in 5 Seconds.*
 
 🚀 NEW: MCP Server Support
+
+[![Glama](https://glama.ai/mcp/servers/XJTLUmedia/AI_answer_copier/badge)](https://glama.ai/mcp/servers/XJTLUmedia/AI_answer_copier)
+
 Stop Copy-Pasting Entirely. This tool now functions as an MCP (Model Context Protocol) Server. This means if you use Claude Desktop or any MCP-enabled IDE, the AI can directly send questions to the exporter without you ever hitting Ctrl+C.
 
 Native Integration: Claude can now "see" your export formats.

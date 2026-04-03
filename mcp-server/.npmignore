@@ -1,0 +1,10 @@
+src/
+test-client.ts
+tsconfig.json
+.npmignore
+node_modules/
+server.json
+PUBLISH_GUIDE.ps1
+*.docx
+*.tgz
+.mcpregistry_*

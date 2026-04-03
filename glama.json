@@ -1,0 +1,10 @@
+{
+  "$schema": "https://glama.ai/mcp/schemas/server.json",
+  "maintainers": [
+    "XJTLUmedia"
+  ],
+  "name": "AI Answer Copier — Markdown MCP Server",
+  "description": "MCP Server that converts Markdown to 14 formats: PDF, DOCX, HTML, LaTeX, CSV, JSON, XML, XLSX, RTF, PNG and more. Built for educators and developers.",
+  "repository": "https://github.com/XJTLUmedia/AI_answer_copier",
+  "homepage": "https://ai-answer-copier.vercel.app"
+}
