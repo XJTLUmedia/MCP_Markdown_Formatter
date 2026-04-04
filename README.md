@@ -357,7 +357,7 @@ This release hardens both the local (`npx`) and remote Vercel MCP transports wit
 | 4 | **Session map memory leak** — `instances` Map now evicts stale sessions after 30 minutes (`SESSION_TTL_MS`); `McpInstance` tracks `lastUsed` | Vercel `/api/mcp` |
 | 5 | **`keepAlive` interval not cleared** on normal SSE stream end — added inner `try/finally` that always calls `clearInterval(keepAlive)` | Vercel `/api/mcp` |
 | 6 | **`_initialized` SDK-internal access** — replaced bare `@ts-ignore` with a `typeof` guard so the server fails gracefully after SDK upgrades | Vercel `/api/mcp` |
-| 7 | **No input size validation** — added 1 MB hard limit (`MAX_INPUT_BYTES`) to all tool calls to prevent runaway CPU/memory on oversized payloads | Both transports |
+| 7 | **No input size validation** — added 1 GB hard limit (`MAX_INPUT_BYTES`) to all tool calls to prevent runaway CPU/memory on oversized payloads | Both transports |
 | 8 | **DELETE method creates new session** — handler now returns `200` immediately on DELETE, preventing phantom session creation | Vercel `/api/mcp` |
 
 ---
