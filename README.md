@@ -5,7 +5,7 @@
 [![npm version](https://img.shields.io/npm/v/@xjtlumedia/markdown-mcp-server.svg)](https://www.npmjs.com/package/@xjtlumedia/markdown-mcp-server)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![MCP Registry](https://img.shields.io/badge/MCP-Registry-purple)](https://registry.modelcontextprotocol.io)
-[![Glama](https://glama.ai/mcp/servers/XJTLUmedia/AI_answer_copier/badge)](https://glama.ai/mcp/servers/XJTLUmedia/AI_answer_copier)
+[![Glama](https://glama.ai/mcp/servers/XJTLUmedia/MCP_Markdown_Formatter/badge)](https://glama.ai/mcp/servers/XJTLUmedia/MCP_Markdown_Formatter)
 [![GitHub](https://img.shields.io/github/stars/XJTLUmedia/AI_answer_copier?style=social)](https://github.com/XJTLUmedia/AI_answer_copier)
 
 **A Model Context Protocol (MCP) server that gives your AI assistant the power to convert Markdown into 23+ professional document formats**, analyze documents, repair broken Markdown, and convert across platforms — all without leaving your AI chat.
