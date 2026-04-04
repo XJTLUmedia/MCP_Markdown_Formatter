@@ -1,7 +1,14 @@
 #!/usr/bin/env node
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import {
+    CallToolRequestSchema,
+    ListToolsRequestSchema,
+    ListPromptsRequestSchema,
+    GetPromptRequestSchema,
+    ListResourcesRequestSchema,
+    ReadResourceRequestSchema,
+} from "@modelcontextprotocol/sdk/types.js";
 import { unified } from 'unified';
 import remarkParse from 'remark-parse';
 import remarkGfm from 'remark-gfm';
@@ -85,6 +92,8 @@ const server = new Server(
     {
         capabilities: {
             tools: {},
+            prompts: {},
+            resources: {},
         },
     }
 );
@@ -490,6 +499,230 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     };
 });
 
+// ── Prompts ──────────────────────────────────────────────────────────
+server.setRequestHandler(ListPromptsRequestSchema, async () => {
+    return {
+        prompts: [
+            {
+                name: "convert-document",
+                description:
+                    "Convert a Markdown document to a specified output format. " +
+                    "Supports: PDF, DOCX, HTML, LaTeX, CSV, JSON, XML, XLSX, RTF, PNG, TXT, MD.",
+                arguments: [
+                    {
+                        name: "format",
+                        description:
+                            "Target output format: pdf, docx, html, latex, csv, json, xml, xlsx, rtf, png, txt, or md",
+                        required: true,
+                    },
+                    {
+                        name: "markdown",
+                        description: "The Markdown content to convert",
+                        required: true,
+                    },
+                ],
+            },
+            {
+                name: "extract-tables",
+                description:
+                    "Extract all tables from a Markdown document and export them as CSV or XLSX spreadsheet format.",
+                arguments: [
+                    {
+                        name: "format",
+                        description:
+                            "Output format for tables: 'csv' for plain text or 'xlsx' for Excel spreadsheet",
+                        required: true,
+                    },
+                    {
+                        name: "markdown",
+                        description:
+                            "The Markdown content containing tables to extract",
+                        required: true,
+                    },
+                ],
+            },
+            {
+                name: "format-for-sharing",
+                description:
+                    "Prepare a Markdown document for sharing by harmonizing formatting and converting to " +
+                    "portable formats (PDF and HTML) with professional styling.",
+                arguments: [
+                    {
+                        name: "markdown",
+                        description: "The Markdown content to format for sharing",
+                        required: true,
+                    },
+                ],
+            },
+        ],
+    };
+});
+
+server.setRequestHandler(GetPromptRequestSchema, async (request) => {
+    const { name, arguments: args } = request.params;
+
+    if (name === "convert-document") {
+        const format = args?.format || "pdf";
+        const markdown = args?.markdown || "";
+        return {
+            description: `Convert Markdown to ${format.toUpperCase()}`,
+            messages: [
+                {
+                    role: "user" as const,
+                    content: {
+                        type: "text" as const,
+                        text: `Please convert the following Markdown document to ${format.toUpperCase()} format using the convert_to_${format} tool.\n\n${markdown}`,
+                    },
+                },
+            ],
+        };
+    }
+
+    if (name === "extract-tables") {
+        const format = args?.format || "csv";
+        const markdown = args?.markdown || "";
+        return {
+            description: `Extract tables from Markdown as ${format.toUpperCase()}`,
+            messages: [
+                {
+                    role: "user" as const,
+                    content: {
+                        type: "text" as const,
+                        text: `Please extract all tables from the following Markdown and convert them to ${format.toUpperCase()} format using the convert_to_${format} tool.\n\n${markdown}`,
+                    },
+                },
+            ],
+        };
+    }
+
+    if (name === "format-for-sharing") {
+        const markdown = args?.markdown || "";
+        return {
+            description: "Format Markdown for professional sharing",
+            messages: [
+                {
+                    role: "user" as const,
+                    content: {
+                        type: "text" as const,
+                        text: `Please format the following Markdown for sharing. First, use harmonize_markdown to clean up the formatting, then convert it to both PDF (using convert_to_pdf) and HTML (using convert_to_html) for distribution.\n\n${markdown}`,
+                    },
+                },
+            ],
+        };
+    }
+
+    throw new Error(`Unknown prompt: ${name}`);
+});
+
+// ── Resources ────────────────────────────────────────────────────────
+server.setRequestHandler(ListResourcesRequestSchema, async () => {
+    return {
+        resources: [
+            {
+                uri: "markdown-formatter://supported-formats",
+                name: "Supported Output Formats",
+                description:
+                    "Complete list of all 14 supported output formats with tool names, types, and descriptions",
+                mimeType: "application/json",
+            },
+            {
+                uri: "markdown-formatter://conversion-guide",
+                name: "Conversion Guide",
+                description:
+                    "Guide for choosing the right output format based on your use case",
+                mimeType: "text/plain",
+            },
+        ],
+    };
+});
+
+server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+    const { uri } = request.params;
+
+    if (uri === "markdown-formatter://supported-formats") {
+        return {
+            contents: [
+                {
+                    uri,
+                    mimeType: "application/json",
+                    text: JSON.stringify(
+                        {
+                            formats: [
+                                { id: "md", name: "Markdown", tool: "convert_to_md", type: "text", description: "Export or harmonize Markdown" },
+                                { id: "txt", name: "Plain Text", tool: "convert_to_txt", type: "text", description: "Strip all formatting" },
+                                { id: "html", name: "HTML", tool: "convert_to_html", type: "text", description: "Styled HTML document" },
+                                { id: "pdf", name: "PDF", tool: "convert_to_pdf", type: "binary", description: "Print-ready PDF (requires Chromium)" },
+                                { id: "docx", name: "Word DOCX", tool: "convert_to_docx", type: "binary", description: "Microsoft Word document" },
+                                { id: "rtf", name: "Rich Text", tool: "convert_to_rtf", type: "text", description: "RTF for legacy word processors" },
+                                { id: "latex", name: "LaTeX", tool: "convert_to_latex", type: "text", description: "LaTeX source code" },
+                                { id: "csv", name: "CSV", tool: "convert_to_csv", type: "text", description: "Tables to comma-separated values" },
+                                { id: "json", name: "JSON", tool: "convert_to_json", type: "text", description: "Structured JSON representation" },
+                                { id: "xml", name: "XML", tool: "convert_to_xml", type: "text", description: "XML document" },
+                                { id: "xlsx", name: "Excel XLSX", tool: "convert_to_xlsx", type: "binary", description: "Excel spreadsheet from tables" },
+                                { id: "png", name: "PNG Image", tool: "convert_to_image", type: "binary", description: "Screenshot image (requires Chromium)" },
+                            ],
+                            total: 12,
+                            special_tools: [
+                                { name: "harmonize_markdown", description: "Normalize Markdown formatting without changing content" },
+                                { name: "generate_html", description: "Generate HTML string without file I/O (read-only)" },
+                            ],
+                        },
+                        null,
+                        2
+                    ),
+                },
+            ],
+        };
+    }
+
+    if (uri === "markdown-formatter://conversion-guide") {
+        return {
+            contents: [
+                {
+                    uri,
+                    mimeType: "text/plain",
+                    text: [
+                        "Markdown Formatter — Conversion Guide",
+                        "======================================",
+                        "",
+                        "Choose a format based on your use case:",
+                        "",
+                        "For sharing documents:",
+                        "  - PDF  — Best for print-ready, read-only distribution",
+                        "  - DOCX — Best for editable documents in Microsoft Word",
+                        "  - HTML — Best for web viewing and embedding",
+                        "",
+                        "For data extraction:",
+                        "  - CSV  — Lightweight tabular data from Markdown tables",
+                        "  - XLSX — Full Excel workbook with formatted tables",
+                        "  - JSON — Machine-readable structured representation",
+                        "  - XML  — XML-based data interchange",
+                        "",
+                        "For visual output:",
+                        "  - PNG  — Screenshot image for chat or social media",
+                        "  - PDF  — Paginated visual output for printing",
+                        "",
+                        "For text processing:",
+                        "  - TXT  — Plain text with all formatting stripped",
+                        "  - MD   — Clean/harmonized Markdown",
+                        "  - LaTeX — For academic papers and typesetting",
+                        "  - RTF  — For legacy word processors and email clients",
+                        "",
+                        "Tips:",
+                        "  - Binary formats (PDF, DOCX, XLSX, PNG) should use output_path",
+                        "  - PDF and PNG require a Chromium browser on the system",
+                        "  - Set PUPPETEER_EXECUTABLE_PATH to override browser detection",
+                        "  - Use harmonize_markdown to clean up formatting before conversion",
+                    ].join("\n"),
+                },
+            ],
+        };
+    }
+
+    throw new Error(`Unknown resource: ${uri}`);
+});
+
+// ── Tool execution ───────────────────────────────────────────────────
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
     try {
         const { name, arguments: args } = request.params;

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <rect width="128" height="128" rx="24" fill="#1a1a2e"/>
+  <rect x="8" y="8" width="112" height="112" rx="18" fill="#16213e"/>
+  <!-- Markdown M symbol -->
+  <path d="M28 88V40h12l12 20 12-20h12v48h-12V60l-12 20-12-20v28H28z" fill="#e94560"/>
+  <!-- Arrow -->
+  <path d="M88 58h16l-8-12z" fill="#0f3460"/>
+  <path d="M88 70h16l-8 12z" fill="#0f3460"/>
+  <rect x="86" y="60" width="20" height="8" rx="2" fill="#0f3460"/>
+  <!-- Format dots -->
+  <circle cx="96" cy="40" r="4" fill="#e94560" opacity="0.7"/>
+  <circle cx="108" cy="40" r="4" fill="#e94560" opacity="0.5"/>
+  <circle cx="96" cy="88" r="4" fill="#e94560" opacity="0.7"/>
+  <circle cx="108" cy="88" r="4" fill="#e94560" opacity="0.5"/>
+</svg>

@@ -1,7 +1,13 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.XJTLUmedia/markdown-formatter",
-  "description": "AI Answer Copier — Convert Markdown to PDF, DOCX, HTML, LaTeX, CSV, JSON, XML, XLSX, RTF, PNG",
+  "displayName": "AI Answer Copier — Markdown Formatter",
+  "description": "MCP Server that converts Markdown to 14 formats: PDF, DOCX, HTML, LaTeX, CSV, JSON, XML, XLSX, RTF, PNG, TXT, MD, and more. Built for educators, developers, and AI workflows.",
+  "homepage": "https://ai-answer-copier.vercel.app",
+  "icons": {
+    "light": "https://raw.githubusercontent.com/XJTLUmedia/AI_answer_copier/main/mcp-server/icon.svg",
+    "dark": "https://raw.githubusercontent.com/XJTLUmedia/AI_answer_copier/main/mcp-server/icon.svg"
+  },
   "repository": {
     "url": "https://github.com/XJTLUmedia/AI_answer_copier",
     "source": "github"
