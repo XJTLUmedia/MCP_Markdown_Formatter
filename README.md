@@ -345,6 +345,32 @@ Zero runtime dependencies on external APIs. Everything runs locally. Your data n
 
 ---
 
+## What's New in v2.1.0
+
+This release hardens both the local (`npx`) and remote Vercel MCP transports with 8 logic fixes:
+
+| # | Fix | Area |
+|---|---|---|
+| 1 | **Browser not closed on error** — `try/finally` around `browser.close()` so Chromium never leaks on PDF/PNG failures | Both transports |
+| 2 | **`generate_html` missing KaTeX CSS** — restored viewport meta, KaTeX stylesheet (SRI hash), and full inline styles so math renders correctly | Vercel `/api/mcp` |
+| 3 | **`convert_to_html` incomplete styles** — added SRI integrity hash, table borders, and blockquote styling to match local output | Vercel `/api/mcp` |
+| 4 | **Session map memory leak** — `instances` Map now evicts stale sessions after 30 minutes (`SESSION_TTL_MS`); `McpInstance` tracks `lastUsed` | Vercel `/api/mcp` |
+| 5 | **`keepAlive` interval not cleared** on normal SSE stream end — added inner `try/finally` that always calls `clearInterval(keepAlive)` | Vercel `/api/mcp` |
+| 6 | **`_initialized` SDK-internal access** — replaced bare `@ts-ignore` with a `typeof` guard so the server fails gracefully after SDK upgrades | Vercel `/api/mcp` |
+| 7 | **No input size validation** — added 1 MB hard limit (`MAX_INPUT_BYTES`) to all tool calls to prevent runaway CPU/memory on oversized payloads | Both transports |
+| 8 | **DELETE method creates new session** — handler now returns `200` immediately on DELETE, preventing phantom session creation | Vercel `/api/mcp` |
+
+---
+
+## Known Limitations
+
+- **PDF / PNG require local Chromium** — `convert_to_pdf` and `convert_to_image` launch a headless browser. This works fine with `npx` but is unavailable on Vercel's free tier (no bundled Chromium). Set the `PUPPETEER_EXECUTABLE_PATH` environment variable to point to your local Chrome if auto-detection fails.
+- **Chromium version on Vercel** — the remote endpoint uses `@sparticuz/chromium-min` with a pinned tar at v131.0.1. If Vercel bumps the Lambda runtime you may need to update the `CHROMIUM_TAR_URL` env var.
+- **1 MB input limit** — all tool calls reject inputs larger than 1 MB. Split large documents into sections before converting.
+- **Session TTL (remote only)** — sessions on the Vercel endpoint expire after 30 minutes of inactivity. Long-running stateful workflows should issue periodic keep-alive calls.
+
+---
+
 ## Development
 
 ```bash

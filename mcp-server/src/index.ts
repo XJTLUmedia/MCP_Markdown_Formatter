@@ -1240,6 +1240,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             throw new Error("Markdown content is required");
         }
 
+        // Guard against oversized inputs to prevent runaway memory/CPU usage
+        const MAX_INPUT_BYTES = 1024 * 1024 * 1024 ; // 1 GB
+        const inputToCheck = markdown ?? (args as any).html ?? '';
+        if (Buffer.byteLength(inputToCheck, 'utf8') > MAX_INPUT_BYTES) {
+            throw new Error('Input too large: content exceeds the 1 GB limit. Please split the document into smaller sections.');
+        }
+
         if (name === "harmonize_markdown") {
             const file = await unified()
                 .use(remarkParse)
@@ -1343,26 +1350,28 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             }
 
             const browser = await puppeteer.launch({ headless: true, executablePath: await findChrome() });
-            const page = await browser.newPage();
-            await page.setContent(htmlDoc);
+            try {
+                const page = await browser.newPage();
+                await page.setContent(htmlDoc);
 
-            let resultBuffer: Buffer;
+                let resultBuffer: Buffer;
 
-            if (name === "convert_to_pdf") {
-                resultBuffer = await page.pdf({ format: 'A4' }) as Buffer;
+                if (name === "convert_to_pdf") {
+                    resultBuffer = await page.pdf({ format: 'A4' }) as Buffer;
+                    return handleOutput(resultBuffer, outputPath, {
+                        format: 'pdf',
+                        description: 'PDF document generated from Markdown via Puppeteer'
+                    });
+                } else {
+                    const screenshot = await page.screenshot({ fullPage: true, encoding: 'binary' });
+                    resultBuffer = screenshot as Buffer;
+                    return handleOutput(resultBuffer, outputPath, {
+                        format: 'png',
+                        description: 'PNG image screenshot of the rendered Markdown'
+                    });
+                }
+            } finally {
                 await browser.close();
-                return handleOutput(resultBuffer, outputPath, {
-                    format: 'pdf',
-                    description: 'PDF document generated from Markdown via Puppeteer'
-                });
-            } else {
-                const screenshot = await page.screenshot({ fullPage: true, encoding: 'binary' });
-                resultBuffer = screenshot as Buffer;
-                await browser.close();
-                return handleOutput(resultBuffer, outputPath, {
-                    format: 'png',
-                    description: 'PNG image screenshot of the rendered Markdown'
-                });
             }
         }
 

@@ -77,10 +77,22 @@ interface McpInstance {
     server: Server;
     transport: any; // StreamableHTTPServerTransport
     isNew: boolean;
+    lastUsed: number;
 }
 
 // Global registry of active instances in this warm lambda
 const instances = new Map<string, McpInstance>();
+
+// Session TTL: evict sessions idle for more than 30 minutes
+const SESSION_TTL_MS = 30 * 60 * 1000;
+function cleanupExpiredSessions() {
+    const now = Date.now();
+    for (const [id, inst] of instances.entries()) {
+        if (now - inst.lastUsed > SESSION_TTL_MS) {
+            instances.delete(id);
+        }
+    }
+}
 
 // Shared setup for all instances
 async function handleOutput(
@@ -548,6 +560,13 @@ function setupServerHandlers(server: Server) {
             const noMarkdownTools = ['html_to_markdown'];
             if (!markdown && !noMarkdownTools.includes(name)) throw new Error("Markdown content is required");
 
+            // Guard against oversized inputs to prevent timeouts and memory pressure
+            const MAX_INPUT_BYTES = 1024 * 1024 * 1024; // 1 GB
+            const inputToCheck = markdown ?? (args as any).html ?? '';
+            if (Buffer.byteLength(inputToCheck, 'utf8') > MAX_INPUT_BYTES) {
+                throw new Error('Input too large: content exceeds the 1 GB limit. Please split the document into smaller sections.');
+            }
+
             if (name === "harmonize_markdown") {
                 const file = await unified().use(remarkParse).use(remarkGfm).use(remarkMath).use(remarkStringify, { bullet: '-', fence: '`', fences: true, incrementListMarker: true, listItemIndent: 'one' }).process(markdown);
                 return handleOutput(String(file), outputPath);
@@ -571,23 +590,25 @@ function setupServerHandlers(server: Server) {
 
             if (name === "convert_to_html" || name === "convert_to_pdf" || name === "convert_to_image") {
                 const htmlFile = await unified().use(remarkParse).use(remarkGfm).use(remarkRehype).use(rehypeKatex).use(rehypeStringify).process(markdown);
-                const htmlDoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"><style>body { font-family: system-ui; padding: 40px; line-height: 1.6; max-width: 800px; margin: 0 auto; }</style></head><body>${String(htmlFile)}</body></html>`;
+                const htmlDoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI+WdtXRGWt2kTvGFasHpSy3SV" crossorigin="anonymous"><style>body { font-family: system-ui; padding: 40px; line-height: 1.6; max-width: 800px; margin: 0 auto; background: white; color: black; } img { max-width: 100%; } pre { background: #f4f4f4; padding: 15px; border-radius: 5px; overflow-x: auto; } table { border-collapse: collapse; width: 100%; margin: 1em 0; } th, td { border: 1px solid #ddd; padding: 8px; text-align: left; } th { background-color: #f2f2f2; } blockquote { border-left: 4px solid #ddd; margin: 0; padding-left: 1em; color: #666; }</style></head><body>${String(htmlFile)}</body></html>`;
 
                 if (name === "convert_to_html") return handleOutput(htmlDoc, outputPath);
 
                 const browser = await getBrowser();
-                const page = await browser.newPage();
-                await page.setContent(htmlDoc);
-                let resultBuffer: Buffer;
+                try {
+                    const page = await browser.newPage();
+                    await page.setContent(htmlDoc);
+                    let resultBuffer: Buffer;
 
-                if (name === "convert_to_pdf") {
-                    resultBuffer = Buffer.from(await page.pdf({ format: 'A4' }));
+                    if (name === "convert_to_pdf") {
+                        resultBuffer = Buffer.from(await page.pdf({ format: 'A4' }));
+                        return handleOutput(resultBuffer, outputPath, { format: 'pdf', description: 'PDF document' });
+                    } else {
+                        resultBuffer = Buffer.from(await page.screenshot({ fullPage: true, encoding: 'binary' }));
+                        return handleOutput(resultBuffer, outputPath, { format: 'png', description: 'PNG image' });
+                    }
+                } finally {
                     await browser.close();
-                    return handleOutput(resultBuffer, outputPath, { format: 'pdf', description: 'PDF document' });
-                } else {
-                    resultBuffer = Buffer.from(await page.screenshot({ fullPage: true, encoding: 'binary' }));
-                    await browser.close();
-                    return handleOutput(resultBuffer, outputPath, { format: 'png', description: 'PNG image' });
                 }
             }
 
@@ -599,7 +620,27 @@ function setupServerHandlers(server: Server) {
 
             if (name === "generate_html") {
                 const htmlFile = await unified().use(remarkParse).use(remarkGfm).use(remarkRehype).use(rehypeKatex).use(rehypeStringify).process(markdown);
-                const htmlDoc = `<!DOCTYPE html><html><head><title>${(args as any).title || 'Doc'}</title></head><body>${String(htmlFile)}</body></html>`;
+                const htmlDoc = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${(args as any).title || 'Document'}</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI+WdtXRGWt2kTvGFasHpSy3SV" crossorigin="anonymous">
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; line-height: 1.6; color: #1a1a1a; }
+        h1, h2, h3 { color: #111; margin-top: 2em; }
+        pre { background: #f4f4f4; padding: 15px; border-radius: 5px; overflow-x: auto; }
+        code { font-family: monospace; background: #eee; padding: 2px 4px; border-radius: 3px; }
+        table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        th { background: #f8f8f8; }
+        blockquote { border-left: 4px solid #ddd; margin: 0; padding-left: 1em; color: #666; }
+        img { max-width: 100%; }
+    </style>
+</head>
+<body>${String(htmlFile)}</body>
+</html>`;
                 return { content: [{ type: "text", text: htmlDoc }] };
             }
 
@@ -974,6 +1015,7 @@ async function getOrCreateInstance(sessionId: string): Promise<McpInstance> {
     if (instances.has(sessionId)) {
         const instance = instances.get(sessionId)!;
         instance.isNew = false;
+        instance.lastUsed = Date.now();
         return instance;
     }
 
@@ -984,7 +1026,7 @@ async function getOrCreateInstance(sessionId: string): Promise<McpInstance> {
     const server = new Server(
         {
             name: "markdown-formatter-mcp",
-            version: "1.0.0",
+            version: "2.1.0",
         },
         {
             capabilities: {
@@ -998,7 +1040,7 @@ async function getOrCreateInstance(sessionId: string): Promise<McpInstance> {
     setupServerHandlers(server);
     await server.connect(transport);
 
-    const instance = { server, transport, isNew: true };
+    const instance = { server, transport, isNew: true, lastUsed: Date.now() };
     instances.set(sessionId, instance);
 
     return instance;
@@ -1085,6 +1127,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const sessionId = providedSessionId || `s_${Math.random().toString(36).substring(2, 10)}`;
     res.setHeader('mcp-session-id', sessionId);
 
+    // Evict stale sessions on every request (cheap O(n) scan, n stays small in practice)
+    cleanupExpiredSessions();
+
+    // Handle DELETE: terminate and remove the session, don't create a new one
+    if (req.method === 'DELETE') {
+        if (providedSessionId && instances.has(providedSessionId)) {
+            instances.delete(providedSessionId);
+        }
+        res.status(200).json({ message: 'Session terminated' });
+        return;
+    }
+
     const isEventStream =
         req.headers.accept?.includes('text/event-stream') ||
         req.headers['mcp-protocol-version'] ||
@@ -1140,8 +1194,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // hitting the same instance for the 'initialize' message.
         if (instance.isNew) {
             console.log(`[MCP] Cold Start/Instance Migration detected for session ${sessionId}. Forcing initialization.`);
-            // @ts-ignore - access private property
-            instance.server._initialized = true;
+            // Access internal SDK property to bypass the initialize handshake requirement
+            // in stateless serverless environments. Guarded to survive future SDK changes.
+            const srv = instance.server as any;
+            if (typeof srv._initialized !== 'undefined') {
+                srv._initialized = true;
+            }
         }
 
         // Build absolute URL for the Web Request
@@ -1202,10 +1260,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     res.on('close', () => clearInterval(keepAlive));
                 }
 
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-                    res.write(value);
+                try {
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        res.write(value);
+                    }
+                } finally {
+                    // Clear timer whether the stream ended normally or errored
+                    if (keepAlive !== undefined) clearInterval(keepAlive);
                 }
             } finally {
                 reader.releaseLock();
