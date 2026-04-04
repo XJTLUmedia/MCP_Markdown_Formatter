@@ -1,5 +1,3 @@
-import { stripMarkdown } from "./core-exports.js";
-
 // ── Slack mrkdwn ─────────────────────────────────────────────────────
 export function markdownToSlack(md: string): string {
     let out = md;

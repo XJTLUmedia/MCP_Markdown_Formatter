@@ -86,7 +86,6 @@ export function htmlToMarkdown(html: string): string {
 function convertHtmlTables(html: string): string {
     return html.replace(/<table[^>]*>([\s\S]*?)<\/table>/gi, (_m, tableContent) => {
         const rows: string[][] = [];
-        let isHeaderRow = true;
 
         // Extract thead rows
         const theadMatch = tableContent.match(/<thead[^>]*>([\s\S]*?)<\/thead>/i);
@@ -110,12 +109,7 @@ function convertHtmlTables(html: string): string {
                 let cells = extractCells(row, 'td');
                 if (cells.length === 0) cells = extractCells(row, 'th');
                 if (cells.length > 0) {
-                    if (rows.length === 0) {
-                        rows.push(cells);
-                        isHeaderRow = true;
-                    } else {
-                        rows.push(cells);
-                    }
+                    rows.push(cells);
                 }
             }
         }
