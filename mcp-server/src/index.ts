@@ -2,7 +2,6 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { z } from "zod";
 import { unified } from 'unified';
 import remarkParse from 'remark-parse';
 import remarkGfm from 'remark-gfm';
@@ -147,123 +146,345 @@ async function handleOutput(
     }
 }
 
+// --- Shared parameter description constants ---
+const PARAM_MARKDOWN = "The raw Markdown source text to convert. Supports GitHub-Flavored Markdown (tables, task lists, strikethrough) and KaTeX math expressions. Pass the full document content as a string, not a file path.";
+const PARAM_OUTPUT_PATH_TEXT = "Optional. Absolute or relative file path (e.g. './output.txt') where the result will be saved. Parent directories are created automatically. If omitted, the converted text content is returned directly in the response as a string. If provided, the file is written to disk and a JSON summary with { success, file_path, file_size_bytes, format } is returned instead.";
+const PARAM_OUTPUT_PATH_BINARY = (fmt: string) =>
+    `Optional. Absolute or relative file path (e.g. './output.${fmt}') where the binary file will be saved. Parent directories are created automatically. If provided, the file is written to disk and a JSON summary with { success, file_path, file_size_bytes, format } is returned. If omitted, a JSON object with { format, file_size_bytes, hint, base64_preview } is returned — the hint will instruct you to call the tool again with output_path to save the file. Binary formats (${fmt.toUpperCase()}) should almost always specify output_path.`;
+const PARAM_TITLE = "Optional. A document title string. Used as the root element name or document metadata title in the output. Defaults to 'document' if omitted.";
+
+// Text-output tool annotations: no file write when output_path is omitted → read-only; with output_path → side effect
+const TEXT_TOOL_ANNOTATIONS = {
+    title: undefined as string | undefined,
+    readOnlyHint: false,      // can write files when output_path is provided
+    destructiveHint: false,    // overwrites files at output_path without warning
+    idempotentHint: true,      // same input always produces the same output
+    openWorldHint: false,      // does not interact with external services
+};
+
+// Binary-output tool annotations (PDF/PNG use Puppeteer which launches a browser)
+const BROWSER_TOOL_ANNOTATIONS = {
+    title: undefined as string | undefined,
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,      // Puppeteer runs a local headless browser, no network needed for rendering
+};
+
 server.setRequestHandler(ListToolsRequestSchema, async () => {
     return {
         tools: [
             {
                 name: "harmonize_markdown",
-                description: "Standardize markdown syntax (headers, list markers, etc.)",
-                inputSchema: zodSchemaToToolInput(z.object({
-                    markdown: z.string(),
-                    output_path: z.string().optional(),
-                })),
+                description:
+                    "Standardize and normalize Markdown syntax without changing the document's meaning. " +
+                    "Re-formats headers (ATX-style), normalizes list markers to '-', enforces fenced code blocks with backticks, " +
+                    "and applies consistent indentation. " +
+                    "Side effects: when output_path is provided, writes the harmonized Markdown to disk (creates parent directories as needed, overwrites existing files). " +
+                    "When output_path is omitted, returns the harmonized text as a string with no file I/O. " +
+                    "Returns: harmonized Markdown string (if no output_path), or JSON with { success, file_path, file_size_bytes, format } (if output_path set). " +
+                    "Use this tool when you need to clean up inconsistent Markdown formatting before further processing. " +
+                    "Prefer convert_to_md with harmonize=true if you also need to save the result, as it combines both steps. " +
+                    "Not suitable for converting Markdown to other formats — use the convert_to_* tools instead.",
+                inputSchema: {
+                    type: "object" as const,
+                    properties: {
+                        markdown: { type: "string", description: PARAM_MARKDOWN },
+                        output_path: { type: "string", description: PARAM_OUTPUT_PATH_TEXT },
+                    },
+                    required: ["markdown"],
+                },
+                annotations: { ...TEXT_TOOL_ANNOTATIONS, title: "Harmonize Markdown" },
             },
             {
                 name: "convert_to_txt",
-                description: "Convert Markdown to Plain Text (strips formatting)",
-                inputSchema: zodSchemaToToolInput(z.object({
-                    markdown: z.string(),
-                    output_path: z.string().optional(),
-                })),
+                description:
+                    "Convert Markdown to plain text by stripping all formatting — removes headers, bold/italic markers, links, images, code fences, and HTML tags. " +
+                    "The result is a human-readable plain-text string with no markup. This is a destructive conversion: formatting information is permanently lost. " +
+                    "Side effects: when output_path is provided, writes the plain text to disk (creates parent directories, overwrites existing files). " +
+                    "When output_path is omitted, returns the plain text string directly. " +
+                    "Returns: plain text string (if no output_path), or JSON { success, file_path, file_size_bytes, format } (if output_path set). " +
+                    "Use this instead of convert_to_md when you need formatting-free content (e.g. for indexing, search, or clipboard). " +
+                    "Use convert_to_html or convert_to_pdf if you need to preserve the document's visual structure.",
+                inputSchema: {
+                    type: "object" as const,
+                    properties: {
+                        markdown: { type: "string", description: PARAM_MARKDOWN },
+                        output_path: { type: "string", description: PARAM_OUTPUT_PATH_TEXT },
+                    },
+                    required: ["markdown"],
+                },
+                annotations: { ...TEXT_TOOL_ANNOTATIONS, title: "Convert to Plain Text" },
             },
             {
                 name: "convert_to_rtf",
-                description: "Convert Markdown to RTF (Rich Text Format)",
-                inputSchema: zodSchemaToToolInput(z.object({
-                    markdown: z.string(),
-                    output_path: z.string().optional(),
-                })),
+                description:
+                    "Convert Markdown to Rich Text Format (RTF). Produces an RTF document string preserving basic formatting: " +
+                    "bold, italic, headers (as styled paragraphs), lists, and code blocks. " +
+                    "Side effects: when output_path is provided, writes the RTF file to disk (creates parent directories, overwrites existing files). " +
+                    "When output_path is omitted, returns the raw RTF markup as a string. " +
+                    "Returns: RTF markup string (if no output_path), or JSON { success, file_path, file_size_bytes, format } (if output_path set). " +
+                    "Use this when the target application requires RTF (e.g. legacy word processors, email clients). " +
+                    "Prefer convert_to_docx for modern Word documents, or convert_to_html for web display.",
+                inputSchema: {
+                    type: "object" as const,
+                    properties: {
+                        markdown: { type: "string", description: PARAM_MARKDOWN },
+                        output_path: { type: "string", description: PARAM_OUTPUT_PATH_TEXT },
+                    },
+                    required: ["markdown"],
+                },
+                annotations: { ...TEXT_TOOL_ANNOTATIONS, title: "Convert to RTF" },
             },
             {
                 name: "convert_to_latex",
-                description: "Convert Markdown to LaTeX",
-                inputSchema: zodSchemaToToolInput(z.object({
-                    markdown: z.string(),
-                    output_path: z.string().optional(),
-                })),
+                description:
+                    "Convert Markdown to LaTeX source code. Produces a LaTeX document fragment with \\section, \\textbf, \\textit, " +
+                    "\\begin{itemize}/\\begin{enumerate} list environments, verbatim code blocks, and table environments. " +
+                    "KaTeX math expressions in the Markdown are passed through as native LaTeX math. " +
+                    "Side effects: when output_path is provided, writes the .tex file to disk (creates parent directories, overwrites existing files). " +
+                    "When output_path is omitted, returns the LaTeX source as a string. " +
+                    "Returns: LaTeX source string (if no output_path), or JSON { success, file_path, file_size_bytes, format } (if output_path set). " +
+                    "Use this when you need to embed content in a LaTeX workflow or compile to PDF via pdflatex/xelatex externally. " +
+                    "For direct PDF output without a LaTeX toolchain, use convert_to_pdf instead.",
+                inputSchema: {
+                    type: "object" as const,
+                    properties: {
+                        markdown: { type: "string", description: PARAM_MARKDOWN },
+                        output_path: { type: "string", description: PARAM_OUTPUT_PATH_TEXT },
+                    },
+                    required: ["markdown"],
+                },
+                annotations: { ...TEXT_TOOL_ANNOTATIONS, title: "Convert to LaTeX" },
             },
             {
                 name: "convert_to_docx",
-                description: "Convert Markdown to DOCX (Word)",
-                inputSchema: zodSchemaToToolInput(z.object({
-                    markdown: z.string(),
-                    output_path: z.string().optional(),
-                })),
+                description:
+                    "Convert Markdown to a Microsoft Word DOCX file. Produces a binary .docx document with styled headings, " +
+                    "bold/italic text, numbered and bulleted lists, and code formatting. " +
+                    "This is a binary format — output_path should almost always be provided. " +
+                    "Side effects: when output_path is provided, writes the DOCX binary to disk (creates parent directories, overwrites existing files). " +
+                    "When output_path is omitted, returns a JSON object with { format: 'docx', file_size_bytes, hint, base64_preview } — " +
+                    "the hint will tell you to re-call with output_path to save the file. " +
+                    "Returns: JSON write-confirmation (if output_path set), or JSON binary-guidance object (if omitted). " +
+                    "Use this for Word-compatible documents. " +
+                    "Prefer convert_to_rtf for legacy word processors, convert_to_pdf for read-only distribution, or convert_to_html for web.",
+                inputSchema: {
+                    type: "object" as const,
+                    properties: {
+                        markdown: { type: "string", description: PARAM_MARKDOWN },
+                        output_path: { type: "string", description: PARAM_OUTPUT_PATH_BINARY("docx") },
+                    },
+                    required: ["markdown"],
+                },
+                annotations: { ...TEXT_TOOL_ANNOTATIONS, title: "Convert to DOCX" },
             },
             {
                 name: "convert_to_pdf",
-                description: "Convert Markdown to PDF (uses Puppeteer)",
-                inputSchema: zodSchemaToToolInput(z.object({
-                    markdown: z.string(),
-                    output_path: z.string().optional(),
-                })),
+                description:
+                    "Convert Markdown to a PDF document. Renders the Markdown as styled HTML (GFM tables, KaTeX math) and then " +
+                    "prints it to PDF via a headless Chromium browser (Puppeteer). Requires a locally installed Chrome, Edge, or Chromium — " +
+                    "set PUPPETEER_EXECUTABLE_PATH env var to override auto-detection. " +
+                    "This is a binary format — output_path should almost always be provided. " +
+                    "Side effects: launches a transient headless browser process for rendering (no network requests are made for the conversion itself, " +
+                    "though the HTML references a CDN KaTeX stylesheet which may be fetched). " +
+                    "When output_path is provided, writes the PDF to disk (creates parent directories, overwrites existing files). " +
+                    "When output_path is omitted, returns JSON { format: 'pdf', file_size_bytes, hint, base64_preview }. " +
+                    "Returns: JSON write-confirmation (if output_path set), or JSON binary-guidance object (if omitted). " +
+                    "Use this for high-fidelity, print-ready document output. " +
+                    "Prefer convert_to_html for web-viewable output, convert_to_docx for editable documents, or convert_to_latex for LaTeX toolchains.",
+                inputSchema: {
+                    type: "object" as const,
+                    properties: {
+                        markdown: { type: "string", description: PARAM_MARKDOWN },
+                        output_path: { type: "string", description: PARAM_OUTPUT_PATH_BINARY("pdf") },
+                    },
+                    required: ["markdown"],
+                },
+                annotations: { ...BROWSER_TOOL_ANNOTATIONS, title: "Convert to PDF" },
             },
             {
                 name: "convert_to_image",
-                description: "Convert Markdown to PNG Image (uses Puppeteer)",
-                inputSchema: zodSchemaToToolInput(z.object({
-                    markdown: z.string(),
-                    output_path: z.string().optional(),
-                })),
+                description:
+                    "Convert Markdown to a PNG image. Renders the Markdown as styled HTML (GFM tables, KaTeX math) and takes a " +
+                    "full-page screenshot via a headless Chromium browser (Puppeteer). Requires a locally installed Chrome, Edge, or Chromium — " +
+                    "set PUPPETEER_EXECUTABLE_PATH env var to override auto-detection. " +
+                    "This is a binary format — output_path should almost always be provided. " +
+                    "Side effects: launches a transient headless browser process (no persistent state; may fetch KaTeX CDN stylesheet). " +
+                    "When output_path is provided, writes the PNG to disk (creates parent directories, overwrites existing files). " +
+                    "When output_path is omitted, returns JSON { format: 'png', file_size_bytes, hint, base64_preview }. " +
+                    "Returns: JSON write-confirmation (if output_path set), or JSON binary-guidance object (if omitted). " +
+                    "Use this when you need a visual snapshot of the rendered Markdown (e.g. for embedding in chat, previews, social cards). " +
+                    "Prefer convert_to_pdf for paginated print output, or convert_to_html for interactive web content.",
+                inputSchema: {
+                    type: "object" as const,
+                    properties: {
+                        markdown: { type: "string", description: PARAM_MARKDOWN },
+                        output_path: { type: "string", description: PARAM_OUTPUT_PATH_BINARY("png") },
+                    },
+                    required: ["markdown"],
+                },
+                annotations: { ...BROWSER_TOOL_ANNOTATIONS, title: "Convert to PNG Image" },
             },
             {
                 name: "convert_to_csv",
-                description: "Extract tables from Markdown to CSV",
-                inputSchema: zodSchemaToToolInput(z.object({
-                    markdown: z.string(),
-                    output_path: z.string().optional(),
-                })),
+                description:
+                    "Extract tables from Markdown and convert them to CSV format. Parses GFM pipe-tables from the input and outputs " +
+                    "comma-separated values. If the Markdown contains multiple tables, they are concatenated with a blank line separator. " +
+                    "Non-table content is ignored. If the Markdown contains no tables, returns an empty string. " +
+                    "Side effects: when output_path is provided, writes the CSV to disk (creates parent directories, overwrites existing files). " +
+                    "When output_path is omitted, returns the CSV text directly as a string. " +
+                    "Returns: CSV text string (if no output_path), or JSON { success, file_path, file_size_bytes, format } (if output_path set). " +
+                    "Use this for lightweight tabular export or when downstream tools expect CSV. " +
+                    "Prefer convert_to_xlsx for Excel-compatible spreadsheets with multiple sheets, or convert_to_json for structured data.",
+                inputSchema: {
+                    type: "object" as const,
+                    properties: {
+                        markdown: { type: "string", description: PARAM_MARKDOWN },
+                        output_path: { type: "string", description: PARAM_OUTPUT_PATH_TEXT },
+                    },
+                    required: ["markdown"],
+                },
+                annotations: { ...TEXT_TOOL_ANNOTATIONS, title: "Convert to CSV" },
             },
             {
                 name: "convert_to_json",
-                description: "Convert Markdown to JSON structure",
-                inputSchema: zodSchemaToToolInput(z.object({
-                    markdown: z.string(),
-                    title: z.string().optional(),
-                    output_path: z.string().optional(),
-                })),
+                description:
+                    "Convert Markdown to a structured JSON representation. Parses the document into a JSON object with the document title " +
+                    "as the root key, containing arrays of section objects with headings, paragraphs, lists, code blocks, and tables. " +
+                    "Useful for programmatic analysis or feeding structured content into other systems. " +
+                    "Side effects: when output_path is provided, writes the JSON to disk (creates parent directories, overwrites existing files). " +
+                    "When output_path is omitted, returns the JSON string directly. " +
+                    "Returns: JSON string (if no output_path), or JSON { success, file_path, file_size_bytes, format } (if output_path set). " +
+                    "Use this when you need a machine-readable AST-like representation of the Markdown content. " +
+                    "Prefer convert_to_xml for XML-based interchange, or convert_to_csv/convert_to_xlsx for tabular data extraction.",
+                inputSchema: {
+                    type: "object" as const,
+                    properties: {
+                        markdown: { type: "string", description: PARAM_MARKDOWN },
+                        title: { type: "string", description: PARAM_TITLE },
+                        output_path: { type: "string", description: PARAM_OUTPUT_PATH_TEXT },
+                    },
+                    required: ["markdown"],
+                },
+                annotations: { ...TEXT_TOOL_ANNOTATIONS, title: "Convert to JSON" },
             },
             {
                 name: "convert_to_xml",
-                description: "Convert Markdown to XML",
-                inputSchema: zodSchemaToToolInput(z.object({
-                    markdown: z.string(),
-                    title: z.string().optional(),
-                    output_path: z.string().optional(),
-                })),
+                description:
+                    "Convert Markdown to an XML document. Parses the Markdown into a structured XML tree with a root element named after " +
+                    "the title parameter, containing <section>, <heading>, <paragraph>, <list>, <code>, and <table> elements. " +
+                    "Produces well-formed XML with an <?xml?> declaration. " +
+                    "Side effects: when output_path is provided, writes the XML to disk (creates parent directories, overwrites existing files). " +
+                    "When output_path is omitted, returns the XML string directly. " +
+                    "Returns: XML string (if no output_path), or JSON { success, file_path, file_size_bytes, format } (if output_path set). " +
+                    "Use this for XML-based data interchange or when downstream systems require XML input. " +
+                    "Prefer convert_to_json for JSON APIs, convert_to_html for XHTML/web content, or convert_to_csv for flat tabular data.",
+                inputSchema: {
+                    type: "object" as const,
+                    properties: {
+                        markdown: { type: "string", description: PARAM_MARKDOWN },
+                        title: { type: "string", description: "Optional. The root XML element name and document title. Must be a valid XML element name (no spaces or special characters). Defaults to 'document' if omitted." },
+                        output_path: { type: "string", description: PARAM_OUTPUT_PATH_TEXT },
+                    },
+                    required: ["markdown"],
+                },
+                annotations: { ...TEXT_TOOL_ANNOTATIONS, title: "Convert to XML" },
             },
             {
                 name: "convert_to_xlsx",
-                description: "Convert Markdown tables to Excel (XLSX)",
-                inputSchema: zodSchemaToToolInput(z.object({
-                    markdown: z.string(),
-                    output_path: z.string().optional(),
-                })),
+                description:
+                    "Convert Markdown tables to a Microsoft Excel XLSX spreadsheet. Parses GFM pipe-tables from the input " +
+                    "and creates an Excel workbook. Each table becomes a sheet in the workbook. Non-table content is ignored. " +
+                    "If the Markdown contains no tables, produces an empty workbook. " +
+                    "This is a binary format — output_path should almost always be provided. " +
+                    "Side effects: when output_path is provided, writes the XLSX binary to disk (creates parent directories, overwrites existing files). " +
+                    "When output_path is omitted, returns JSON { format: 'xlsx', file_size_bytes, hint, base64_preview }. " +
+                    "Returns: JSON write-confirmation (if output_path set), or JSON binary-guidance object (if omitted). " +
+                    "Use this when you need a full Excel file with formatting. " +
+                    "Prefer convert_to_csv for lightweight plain-text tabular export, or convert_to_json for structured programmatic access.",
+                inputSchema: {
+                    type: "object" as const,
+                    properties: {
+                        markdown: { type: "string", description: PARAM_MARKDOWN },
+                        output_path: { type: "string", description: PARAM_OUTPUT_PATH_BINARY("xlsx") },
+                    },
+                    required: ["markdown"],
+                },
+                annotations: { ...TEXT_TOOL_ANNOTATIONS, title: "Convert to XLSX" },
             },
             {
                 name: "convert_to_html",
-                description: "Convert Markdown to HTML",
-                inputSchema: zodSchemaToToolInput(z.object({
-                    markdown: z.string(),
-                    output_path: z.string().optional(),
-                })),
+                description:
+                    "Convert Markdown to a complete, styled HTML document. Renders GFM (tables, task lists, strikethrough) and " +
+                    "KaTeX math into semantic HTML with an embedded stylesheet for clean presentation. " +
+                    "The output is a full <!DOCTYPE html> document with <head> (charset, KaTeX CSS CDN link, inline styles) and <body>. " +
+                    "Side effects: when output_path is provided, writes the HTML file to disk (creates parent directories, overwrites existing files). " +
+                    "When output_path is omitted, returns the full HTML string directly. " +
+                    "Returns: HTML document string (if no output_path), or JSON { success, file_path, file_size_bytes, format } (if output_path set). " +
+                    "Use this when you need a file saved to disk or when you need the full document. " +
+                    "Prefer generate_html if you only need the HTML string returned directly (no file I/O) and want inline styles without a CDN link. " +
+                    "Prefer convert_to_pdf for print-ready output, or convert_to_image for a visual snapshot.",
+                inputSchema: {
+                    type: "object" as const,
+                    properties: {
+                        markdown: { type: "string", description: PARAM_MARKDOWN },
+                        output_path: { type: "string", description: PARAM_OUTPUT_PATH_TEXT },
+                    },
+                    required: ["markdown"],
+                },
+                annotations: { ...TEXT_TOOL_ANNOTATIONS, title: "Convert to HTML" },
             },
             {
                 name: "convert_to_md",
-                description: "Export original Markdown content (with optional harmonization)",
-                inputSchema: zodSchemaToToolInput(z.object({
-                    markdown: z.string(),
-                    harmonize: z.boolean().optional(),
-                    output_path: z.string().optional(),
-                })),
+                description:
+                    "Export Markdown content, optionally harmonizing its formatting first. When harmonize=false (default), " +
+                    "returns the input Markdown unchanged. When harmonize=true, applies the same normalization as harmonize_markdown " +
+                    "(ATX-style headers, '-' list markers, fenced code blocks, consistent indentation) before returning. " +
+                    "Side effects: when output_path is provided, writes the Markdown to disk (creates parent directories, overwrites existing files). " +
+                    "When output_path is omitted, returns the Markdown string directly. " +
+                    "Returns: Markdown string (if no output_path), or JSON { success, file_path, file_size_bytes, format } (if output_path set). " +
+                    "Use this when you want to save Markdown to a file (with or without cleanup). " +
+                    "Prefer harmonize_markdown if you only want to normalize formatting without saving to disk. " +
+                    "Use the convert_to_* family for other output formats.",
+                inputSchema: {
+                    type: "object" as const,
+                    properties: {
+                        markdown: { type: "string", description: PARAM_MARKDOWN },
+                        harmonize: { type: "boolean", description: "Optional. When true, normalizes Markdown syntax (ATX headers, '-' list markers, fenced code blocks, consistent indentation) before returning or saving. When false or omitted, the Markdown is passed through unchanged. Defaults to false." },
+                        output_path: { type: "string", description: PARAM_OUTPUT_PATH_TEXT },
+                    },
+                    required: ["markdown"],
+                },
+                annotations: { ...TEXT_TOOL_ANNOTATIONS, title: "Export Markdown" },
             },
             {
                 name: "generate_html",
-                description: "Generate a complete HTML document from Markdown with inline styles (returns full HTML string)",
-                inputSchema: zodSchemaToToolInput(z.object({
-                    markdown: z.string(),
-                    title: z.string().optional(),
-                })),
+                description:
+                    "Generate a complete, self-contained HTML document from Markdown with all styles inlined. " +
+                    "Renders GFM (tables, task lists, strikethrough) and KaTeX math into a full HTML page with an embedded <style> block " +
+                    "and a KaTeX CSS CDN link. Returns the HTML string directly — no file is written to disk. " +
+                    "Side effects: none. This tool is read-only and performs no file I/O. " +
+                    "Returns: a complete HTML document string (<!DOCTYPE html>…</html>) with inline styles, ready for rendering in a browser. " +
+                    "The optional title parameter sets the <title> tag in the HTML <head> section. " +
+                    "Use this when you need styled HTML output returned as a string (e.g., for embedding in responses or previewing). " +
+                    "Prefer convert_to_html when you need to write the HTML to a file on disk. " +
+                    "Prefer convert_to_pdf or convert_to_image for non-HTML visual output formats.",
+                inputSchema: {
+                    type: "object" as const,
+                    properties: {
+                        markdown: { type: "string", description: PARAM_MARKDOWN },
+                        title: { type: "string", description: "Optional. Sets the <title> tag in the HTML document's <head> section. Displayed in browser tabs and bookmarks. Defaults to 'Document' if omitted." },
+                    },
+                    required: ["markdown"],
+                },
+                annotations: {
+                    title: "Generate HTML Document",
+                    readOnlyHint: true,    // never writes to disk
+                    destructiveHint: false,
+                    idempotentHint: true,
+                    openWorldHint: false,
+                },
             }
         ],
     };
@@ -473,29 +694,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
     }
 });
-
-function zodSchemaToToolInput(schema: z.ZodType<any>): any {
-    const shape = (schema as any).shape;
-    const properties: any = {};
-    const required: string[] = [];
-
-    for (const key in shape) {
-        const field = shape[key];
-        const isOptional = field.isOptional?.() || field instanceof z.ZodOptional;
-
-        properties[key] = { type: "string" };
-
-        if (!isOptional) {
-            required.push(key);
-        }
-    }
-
-    return {
-        type: "object",
-        properties,
-        required
-    };
-}
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
