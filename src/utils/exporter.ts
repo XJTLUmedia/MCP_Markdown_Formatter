@@ -17,6 +17,19 @@ import {
     generateXML,
     parseMarkdownToTableData
 } from './core-exports';
+import {
+    markdownToSlack,
+    markdownToDiscord,
+    markdownToJira,
+    markdownToConfluence,
+    markdownToAsciiDoc,
+    markdownToRST,
+    markdownToMediaWiki,
+    markdownToBBCode,
+    markdownToTextile,
+    markdownToOrgMode
+} from './platform-converters';
+import { markdownToEmailHtml } from './email-html';
 
 /**
  * Export content as Plain Text (.txt)
@@ -269,4 +282,72 @@ export async function copyRichText(htmlContent: string): Promise<boolean> {
         console.error('Failed to copy:', err);
         try { await navigator.clipboard.writeText(htmlContent.replace(/<[^>]*>/g, '')); return true; } catch { return false; }
     }
+}
+
+// ── Platform Converter Exports ───────────────────────────────────────
+
+export function exportAsSlack(content: string, filename: string = 'document'): void {
+    const result = markdownToSlack(content);
+    const blob = new Blob([result], { type: 'text/plain;charset=utf-8' });
+    saveAs(blob, `${filename}.slack.txt`);
+}
+
+export function exportAsDiscord(content: string, filename: string = 'document'): void {
+    const result = markdownToDiscord(content);
+    const blob = new Blob([result], { type: 'text/plain;charset=utf-8' });
+    saveAs(blob, `${filename}.discord.md`);
+}
+
+export function exportAsJira(content: string, filename: string = 'document'): void {
+    const result = markdownToJira(content);
+    const blob = new Blob([result], { type: 'text/plain;charset=utf-8' });
+    saveAs(blob, `${filename}.jira.txt`);
+}
+
+export function exportAsConfluence(content: string, filename: string = 'document'): void {
+    const result = markdownToConfluence(content);
+    const blob = new Blob([result], { type: 'text/plain;charset=utf-8' });
+    saveAs(blob, `${filename}.confluence.txt`);
+}
+
+export function exportAsAsciiDoc(content: string, filename: string = 'document'): void {
+    const result = markdownToAsciiDoc(content);
+    const blob = new Blob([result], { type: 'text/plain;charset=utf-8' });
+    saveAs(blob, `${filename}.adoc`);
+}
+
+export function exportAsRST(content: string, filename: string = 'document'): void {
+    const result = markdownToRST(content);
+    const blob = new Blob([result], { type: 'text/plain;charset=utf-8' });
+    saveAs(blob, `${filename}.rst`);
+}
+
+export function exportAsMediaWiki(content: string, filename: string = 'document'): void {
+    const result = markdownToMediaWiki(content);
+    const blob = new Blob([result], { type: 'text/plain;charset=utf-8' });
+    saveAs(blob, `${filename}.mediawiki.txt`);
+}
+
+export function exportAsBBCode(content: string, filename: string = 'document'): void {
+    const result = markdownToBBCode(content);
+    const blob = new Blob([result], { type: 'text/plain;charset=utf-8' });
+    saveAs(blob, `${filename}.bbcode.txt`);
+}
+
+export function exportAsTextile(content: string, filename: string = 'document'): void {
+    const result = markdownToTextile(content);
+    const blob = new Blob([result], { type: 'text/plain;charset=utf-8' });
+    saveAs(blob, `${filename}.textile`);
+}
+
+export function exportAsOrgMode(content: string, filename: string = 'document'): void {
+    const result = markdownToOrgMode(content);
+    const blob = new Blob([result], { type: 'text/plain;charset=utf-8' });
+    saveAs(blob, `${filename}.org`);
+}
+
+export async function exportAsEmailHtml(content: string, filename: string = 'document'): Promise<void> {
+    const result = await markdownToEmailHtml(content);
+    const blob = new Blob([result], { type: 'text/html;charset=utf-8' });
+    saveAs(blob, `${filename}.email.html`);
 }

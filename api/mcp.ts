@@ -27,6 +27,31 @@ import {
     generateXLSXIndex,
     cleanMarkdownText
 } from "../src/utils/core-exports.js";
+import {
+    markdownToSlack,
+    markdownToDiscord,
+    markdownToJira,
+    markdownToConfluence,
+    markdownToAsciiDoc,
+    markdownToRST,
+    markdownToMediaWiki,
+    markdownToBBCode,
+    markdownToTextile,
+    markdownToOrgMode,
+} from "../mcp-server/src/platform-converters.js";
+import {
+    repairMarkdown,
+    lintMarkdown,
+} from "../mcp-server/src/markdown-repair.js";
+import {
+    extractCodeBlocks,
+    extractLinks,
+    generateTOC,
+    analyzeDocument,
+    extractStructure,
+} from "../mcp-server/src/document-analysis.js";
+import { htmlToMarkdown } from "../mcp-server/src/html-import.js";
+import { markdownToEmailHtml } from "../mcp-server/src/email-html.js";
 import { Packer } from "docx";
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
@@ -391,7 +416,125 @@ function setupServerHandlers(server: Server) {
                         idempotentHint: true,
                         openWorldHint: false,
                     },
-                }
+                },
+                // ── Platform-specific format tools ──
+                {
+                    name: "convert_to_slack",
+                    description: "Convert Markdown to Slack mrkdwn format.",
+                    inputSchema: { type: "object" as const, properties: { markdown: { type: "string", description: PARAM_MARKDOWN }, output_path: { type: "string", description: PARAM_OUTPUT_PATH_TEXT } }, required: ["markdown"] },
+                    annotations: { ...TEXT_TOOL_ANNOTATIONS, title: "Convert to Slack mrkdwn" },
+                },
+                {
+                    name: "convert_to_discord",
+                    description: "Convert Markdown to Discord-compatible format.",
+                    inputSchema: { type: "object" as const, properties: { markdown: { type: "string", description: PARAM_MARKDOWN }, output_path: { type: "string", description: PARAM_OUTPUT_PATH_TEXT } }, required: ["markdown"] },
+                    annotations: { ...TEXT_TOOL_ANNOTATIONS, title: "Convert to Discord Markdown" },
+                },
+                {
+                    name: "convert_to_jira",
+                    description: "Convert Markdown to JIRA wiki markup.",
+                    inputSchema: { type: "object" as const, properties: { markdown: { type: "string", description: PARAM_MARKDOWN }, output_path: { type: "string", description: PARAM_OUTPUT_PATH_TEXT } }, required: ["markdown"] },
+                    annotations: { ...TEXT_TOOL_ANNOTATIONS, title: "Convert to JIRA Markup" },
+                },
+                {
+                    name: "convert_to_confluence",
+                    description: "Convert Markdown to Confluence wiki markup.",
+                    inputSchema: { type: "object" as const, properties: { markdown: { type: "string", description: PARAM_MARKDOWN }, output_path: { type: "string", description: PARAM_OUTPUT_PATH_TEXT } }, required: ["markdown"] },
+                    annotations: { ...TEXT_TOOL_ANNOTATIONS, title: "Convert to Confluence Markup" },
+                },
+                {
+                    name: "convert_to_asciidoc",
+                    description: "Convert Markdown to AsciiDoc format.",
+                    inputSchema: { type: "object" as const, properties: { markdown: { type: "string", description: PARAM_MARKDOWN }, output_path: { type: "string", description: PARAM_OUTPUT_PATH_TEXT } }, required: ["markdown"] },
+                    annotations: { ...TEXT_TOOL_ANNOTATIONS, title: "Convert to AsciiDoc" },
+                },
+                {
+                    name: "convert_to_rst",
+                    description: "Convert Markdown to reStructuredText (RST) format.",
+                    inputSchema: { type: "object" as const, properties: { markdown: { type: "string", description: PARAM_MARKDOWN }, output_path: { type: "string", description: PARAM_OUTPUT_PATH_TEXT } }, required: ["markdown"] },
+                    annotations: { ...TEXT_TOOL_ANNOTATIONS, title: "Convert to reStructuredText" },
+                },
+                {
+                    name: "convert_to_mediawiki",
+                    description: "Convert Markdown to MediaWiki markup.",
+                    inputSchema: { type: "object" as const, properties: { markdown: { type: "string", description: PARAM_MARKDOWN }, output_path: { type: "string", description: PARAM_OUTPUT_PATH_TEXT } }, required: ["markdown"] },
+                    annotations: { ...TEXT_TOOL_ANNOTATIONS, title: "Convert to MediaWiki" },
+                },
+                {
+                    name: "convert_to_bbcode",
+                    description: "Convert Markdown to BBCode format for forum posts.",
+                    inputSchema: { type: "object" as const, properties: { markdown: { type: "string", description: PARAM_MARKDOWN }, output_path: { type: "string", description: PARAM_OUTPUT_PATH_TEXT } }, required: ["markdown"] },
+                    annotations: { ...TEXT_TOOL_ANNOTATIONS, title: "Convert to BBCode" },
+                },
+                {
+                    name: "convert_to_textile",
+                    description: "Convert Markdown to Textile markup format.",
+                    inputSchema: { type: "object" as const, properties: { markdown: { type: "string", description: PARAM_MARKDOWN }, output_path: { type: "string", description: PARAM_OUTPUT_PATH_TEXT } }, required: ["markdown"] },
+                    annotations: { ...TEXT_TOOL_ANNOTATIONS, title: "Convert to Textile" },
+                },
+                {
+                    name: "convert_to_orgmode",
+                    description: "Convert Markdown to Emacs Org Mode format.",
+                    inputSchema: { type: "object" as const, properties: { markdown: { type: "string", description: PARAM_MARKDOWN }, output_path: { type: "string", description: PARAM_OUTPUT_PATH_TEXT } }, required: ["markdown"] },
+                    annotations: { ...TEXT_TOOL_ANNOTATIONS, title: "Convert to Org Mode" },
+                },
+                {
+                    name: "convert_to_email_html",
+                    description: "Convert Markdown to email-optimized HTML with all styles inlined for Outlook, Gmail, etc.",
+                    inputSchema: { type: "object" as const, properties: { markdown: { type: "string", description: PARAM_MARKDOWN }, output_path: { type: "string", description: PARAM_OUTPUT_PATH_TEXT } }, required: ["markdown"] },
+                    annotations: { ...TEXT_TOOL_ANNOTATIONS, title: "Convert to Email HTML" },
+                },
+                // ── Import tools ──
+                {
+                    name: "html_to_markdown",
+                    description: "Convert HTML to Markdown. Handles headings, tables, lists, code blocks, links, images, and inline formatting.",
+                    inputSchema: { type: "object" as const, properties: { html: { type: "string", description: "The HTML content to convert to Markdown." }, output_path: { type: "string", description: PARAM_OUTPUT_PATH_TEXT } }, required: ["html"] },
+                    annotations: { ...TEXT_TOOL_ANNOTATIONS, title: "Import HTML to Markdown" },
+                },
+                // ── Repair / Lint tools ──
+                {
+                    name: "repair_markdown",
+                    description: "Repair broken Markdown from LLM output or copy-paste. Fixes unclosed code fences, broken tables, stray emphasis markers, etc.",
+                    inputSchema: { type: "object" as const, properties: { markdown: { type: "string", description: "The potentially broken Markdown text to repair." }, output_path: { type: "string", description: PARAM_OUTPUT_PATH_TEXT } }, required: ["markdown"] },
+                    annotations: { ...TEXT_TOOL_ANNOTATIONS, title: "Repair Broken Markdown" },
+                },
+                {
+                    name: "lint_markdown",
+                    description: "Lint Markdown and report issues as a JSON array with line, severity, rule, message, and fixable flag.",
+                    inputSchema: { type: "object" as const, properties: { markdown: { type: "string", description: "The Markdown text to lint." } }, required: ["markdown"] },
+                    annotations: { title: "Lint Markdown", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+                },
+                // ── Analysis tools ──
+                {
+                    name: "extract_code_blocks",
+                    description: "Extract all code blocks from Markdown. Returns JSON array with language, code, start/end line numbers.",
+                    inputSchema: { type: "object" as const, properties: { markdown: { type: "string", description: "The Markdown text to extract code blocks from." } }, required: ["markdown"] },
+                    annotations: { title: "Extract Code Blocks", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+                },
+                {
+                    name: "extract_links",
+                    description: "Extract all links and images from Markdown. Returns JSON with text, URL, line, and type.",
+                    inputSchema: { type: "object" as const, properties: { markdown: { type: "string", description: "The Markdown text to extract links from." } }, required: ["markdown"] },
+                    annotations: { title: "Extract Links", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+                },
+                {
+                    name: "generate_toc",
+                    description: "Generate a Table of Contents from Markdown headings with indented links.",
+                    inputSchema: { type: "object" as const, properties: { markdown: { type: "string", description: "The Markdown text to generate a TOC from." }, max_depth: { type: "number", description: "Maximum heading depth (1-6, default: 6)." } }, required: ["markdown"] },
+                    annotations: { title: "Generate Table of Contents", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+                },
+                {
+                    name: "analyze_document",
+                    description: "Analyze Markdown and return comprehensive statistics: word/line/character counts, element counts, reading time.",
+                    inputSchema: { type: "object" as const, properties: { markdown: { type: "string", description: "The Markdown text to analyze." } }, required: ["markdown"] },
+                    annotations: { title: "Analyze Document Statistics", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+                },
+                {
+                    name: "extract_structure",
+                    description: "Extract full document structure: stats, heading outline, code block summary, and link summary.",
+                    inputSchema: { type: "object" as const, properties: { markdown: { type: "string", description: "The Markdown text to extract structure from." } }, required: ["markdown"] },
+                    annotations: { title: "Extract Document Structure", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+                },
             ],
         };
     });
@@ -402,7 +545,8 @@ function setupServerHandlers(server: Server) {
             const markdown = (args as any).markdown;
             const outputPath = (args as any).output_path;
 
-            if (!markdown) throw new Error("Markdown content is required");
+            const noMarkdownTools = ['html_to_markdown'];
+            if (!markdown && !noMarkdownTools.includes(name)) throw new Error("Markdown content is required");
 
             if (name === "harmonize_markdown") {
                 const file = await unified().use(remarkParse).use(remarkGfm).use(remarkMath).use(remarkStringify, { bullet: '-', fence: '`', fences: true, incrementListMarker: true, listItemIndent: 'one' }).process(markdown);
@@ -458,6 +602,42 @@ function setupServerHandlers(server: Server) {
                 const htmlDoc = `<!DOCTYPE html><html><head><title>${(args as any).title || 'Doc'}</title></head><body>${String(htmlFile)}</body></html>`;
                 return { content: [{ type: "text", text: htmlDoc }] };
             }
+
+            // ── Platform converters ──
+            if (name === "convert_to_slack") return handleOutput(markdownToSlack(markdown), outputPath);
+            if (name === "convert_to_discord") return handleOutput(markdownToDiscord(markdown), outputPath);
+            if (name === "convert_to_jira") return handleOutput(markdownToJira(markdown), outputPath);
+            if (name === "convert_to_confluence") return handleOutput(markdownToConfluence(markdown), outputPath);
+            if (name === "convert_to_asciidoc") return handleOutput(markdownToAsciiDoc(markdown), outputPath);
+            if (name === "convert_to_rst") return handleOutput(markdownToRST(markdown), outputPath);
+            if (name === "convert_to_mediawiki") return handleOutput(markdownToMediaWiki(markdown), outputPath);
+            if (name === "convert_to_bbcode") return handleOutput(markdownToBBCode(markdown), outputPath);
+            if (name === "convert_to_textile") return handleOutput(markdownToTextile(markdown), outputPath);
+            if (name === "convert_to_orgmode") return handleOutput(markdownToOrgMode(markdown), outputPath);
+
+            // ── Email HTML ──
+            if (name === "convert_to_email_html") {
+                const emailHtml = await markdownToEmailHtml(markdown);
+                return handleOutput(emailHtml, outputPath);
+            }
+
+            // ── Import ──
+            if (name === "html_to_markdown") {
+                const html = (args as any).html;
+                if (!html) throw new Error("HTML content is required");
+                return handleOutput(htmlToMarkdown(html), outputPath);
+            }
+
+            // ── Repair / Lint ──
+            if (name === "repair_markdown") return handleOutput(repairMarkdown(markdown), outputPath);
+            if (name === "lint_markdown") return { content: [{ type: "text", text: JSON.stringify(lintMarkdown(markdown), null, 2) }] };
+
+            // ── Analysis ──
+            if (name === "extract_code_blocks") return { content: [{ type: "text", text: JSON.stringify(extractCodeBlocks(markdown), null, 2) }] };
+            if (name === "extract_links") return { content: [{ type: "text", text: JSON.stringify(extractLinks(markdown), null, 2) }] };
+            if (name === "generate_toc") return handleOutput(generateTOC(markdown, (args as any).max_depth || 6), outputPath);
+            if (name === "analyze_document") return { content: [{ type: "text", text: JSON.stringify(analyzeDocument(markdown), null, 2) }] };
+            if (name === "extract_structure") return { content: [{ type: "text", text: JSON.stringify(extractStructure(markdown), null, 2) }] };
 
             throw new Error(`Unknown tool: ${name}`);
         } catch (error: any) {
@@ -517,6 +697,28 @@ function setupServerHandlers(server: Server) {
                         },
                     ],
                 },
+                {
+                    name: "analyze-and-repair",
+                    description: "Analyze a Markdown document for issues, repair problems, and return both the lint report and repaired document.",
+                    arguments: [
+                        { name: "markdown", description: "The Markdown content to analyze and repair", required: true },
+                    ],
+                },
+                {
+                    name: "convert-for-platform",
+                    description: "Convert Markdown to a platform-specific format: slack, discord, jira, confluence, asciidoc, rst, mediawiki, bbcode, textile, orgmode.",
+                    arguments: [
+                        { name: "platform", description: "Target platform: slack, discord, jira, confluence, asciidoc, rst, mediawiki, bbcode, textile, or orgmode", required: true },
+                        { name: "markdown", description: "The Markdown content to convert", required: true },
+                    ],
+                },
+                {
+                    name: "document-overview",
+                    description: "Get a comprehensive overview of a Markdown document: statistics, structure, TOC, code blocks, and links.",
+                    arguments: [
+                        { name: "markdown", description: "The Markdown content to analyze", required: true },
+                    ],
+                },
             ],
         };
     });
@@ -574,6 +776,31 @@ function setupServerHandlers(server: Server) {
             };
         }
 
+        if (name === "analyze-and-repair") {
+            const markdown = args?.markdown || "";
+            return {
+                description: "Analyze and repair Markdown document",
+                messages: [{ role: "user" as const, content: { type: "text" as const, text: `Please analyze and repair the following Markdown document:\n1. Use lint_markdown to identify issues.\n2. Use repair_markdown to fix them.\n3. Use lint_markdown again to confirm.\n\n${markdown}` } }],
+            };
+        }
+
+        if (name === "convert-for-platform") {
+            const platform = args?.platform || "slack";
+            const markdown = args?.markdown || "";
+            return {
+                description: `Convert Markdown for ${platform}`,
+                messages: [{ role: "user" as const, content: { type: "text" as const, text: `Please convert the following Markdown to ${platform} format using the convert_to_${platform} tool.\n\n${markdown}` } }],
+            };
+        }
+
+        if (name === "document-overview") {
+            const markdown = args?.markdown || "";
+            return {
+                description: "Comprehensive document overview",
+                messages: [{ role: "user" as const, content: { type: "text" as const, text: `Please provide a comprehensive overview of the following Markdown document:\n1. Use analyze_document for statistics\n2. Use generate_toc for table of contents\n3. Use extract_code_blocks for code snippets\n4. Use extract_links for all links\n\n${markdown}` } }],
+            };
+        }
+
         throw new Error(`Unknown prompt: ${name}`);
     });
 
@@ -609,23 +836,48 @@ function setupServerHandlers(server: Server) {
                         text: JSON.stringify(
                             {
                                 formats: [
-                                    { id: "md", name: "Markdown", tool: "convert_to_md", type: "text" },
-                                    { id: "txt", name: "Plain Text", tool: "convert_to_txt", type: "text" },
-                                    { id: "html", name: "HTML", tool: "convert_to_html", type: "text" },
-                                    { id: "pdf", name: "PDF", tool: "convert_to_pdf", type: "binary" },
-                                    { id: "docx", name: "Word DOCX", tool: "convert_to_docx", type: "binary" },
-                                    { id: "rtf", name: "Rich Text", tool: "convert_to_rtf", type: "text" },
-                                    { id: "latex", name: "LaTeX", tool: "convert_to_latex", type: "text" },
-                                    { id: "csv", name: "CSV", tool: "convert_to_csv", type: "text" },
-                                    { id: "json", name: "JSON", tool: "convert_to_json", type: "text" },
-                                    { id: "xml", name: "XML", tool: "convert_to_xml", type: "text" },
-                                    { id: "xlsx", name: "Excel XLSX", tool: "convert_to_xlsx", type: "binary" },
-                                    { id: "png", name: "PNG Image", tool: "convert_to_image", type: "binary" },
+                                    { id: "md", name: "Markdown", tool: "convert_to_md", type: "text", description: "Export or harmonize Markdown" },
+                                    { id: "txt", name: "Plain Text", tool: "convert_to_txt", type: "text", description: "Strip all formatting" },
+                                    { id: "html", name: "HTML", tool: "convert_to_html", type: "text", description: "Styled HTML document" },
+                                    { id: "email_html", name: "Email HTML", tool: "convert_to_email_html", type: "text", description: "Email-optimized HTML with inlined styles" },
+                                    { id: "pdf", name: "PDF", tool: "convert_to_pdf", type: "binary", description: "Print-ready PDF (requires Chromium)" },
+                                    { id: "docx", name: "Word DOCX", tool: "convert_to_docx", type: "binary", description: "Microsoft Word document" },
+                                    { id: "rtf", name: "Rich Text", tool: "convert_to_rtf", type: "text", description: "RTF for legacy word processors" },
+                                    { id: "latex", name: "LaTeX", tool: "convert_to_latex", type: "text", description: "LaTeX source code" },
+                                    { id: "csv", name: "CSV", tool: "convert_to_csv", type: "text", description: "Tables to comma-separated values" },
+                                    { id: "json", name: "JSON", tool: "convert_to_json", type: "text", description: "Structured JSON representation" },
+                                    { id: "xml", name: "XML", tool: "convert_to_xml", type: "text", description: "XML document" },
+                                    { id: "xlsx", name: "Excel XLSX", tool: "convert_to_xlsx", type: "binary", description: "Excel spreadsheet from tables" },
+                                    { id: "png", name: "PNG Image", tool: "convert_to_image", type: "binary", description: "Screenshot image (requires Chromium)" },
+                                    { id: "slack", name: "Slack mrkdwn", tool: "convert_to_slack", type: "text", description: "Slack messaging format" },
+                                    { id: "discord", name: "Discord Markdown", tool: "convert_to_discord", type: "text", description: "Discord-compatible formatting" },
+                                    { id: "jira", name: "JIRA Markup", tool: "convert_to_jira", type: "text", description: "Atlassian JIRA wiki markup" },
+                                    { id: "confluence", name: "Confluence Markup", tool: "convert_to_confluence", type: "text", description: "Atlassian Confluence wiki markup" },
+                                    { id: "asciidoc", name: "AsciiDoc", tool: "convert_to_asciidoc", type: "text", description: "AsciiDoc lightweight markup" },
+                                    { id: "rst", name: "reStructuredText", tool: "convert_to_rst", type: "text", description: "Python/Sphinx documentation format" },
+                                    { id: "mediawiki", name: "MediaWiki", tool: "convert_to_mediawiki", type: "text", description: "Wikipedia/MediaWiki markup" },
+                                    { id: "bbcode", name: "BBCode", tool: "convert_to_bbcode", type: "text", description: "Forum posting format" },
+                                    { id: "textile", name: "Textile", tool: "convert_to_textile", type: "text", description: "Textile markup (Redmine)" },
+                                    { id: "orgmode", name: "Org Mode", tool: "convert_to_orgmode", type: "text", description: "Emacs Org Mode format" },
                                 ],
-                                total: 12,
+                                total: 23,
                                 special_tools: [
-                                    { name: "harmonize_markdown", description: "Normalize Markdown formatting" },
-                                    { name: "generate_html", description: "Generate HTML string (read-only)" },
+                                    { name: "harmonize_markdown", description: "Normalize Markdown formatting without changing content" },
+                                    { name: "generate_html", description: "Generate HTML string without file I/O (read-only)" },
+                                ],
+                                analysis_tools: [
+                                    { name: "extract_code_blocks", description: "Extract all code blocks with language and line info" },
+                                    { name: "extract_links", description: "Extract all links and images with type classification" },
+                                    { name: "generate_toc", description: "Generate a Markdown Table of Contents from headings" },
+                                    { name: "analyze_document", description: "Comprehensive document statistics (words, lines, reading time)" },
+                                    { name: "extract_structure", description: "Full document structure overview (stats, outline, summaries)" },
+                                ],
+                                repair_tools: [
+                                    { name: "repair_markdown", description: "Fix broken Markdown from LLM output or copy-paste" },
+                                    { name: "lint_markdown", description: "Lint Markdown and report issues as JSON" },
+                                ],
+                                import_tools: [
+                                    { name: "html_to_markdown", description: "Convert HTML back to Markdown" },
                                 ],
                             },
                             null,
@@ -652,6 +904,7 @@ function setupServerHandlers(server: Server) {
                             "  - PDF  — Best for print-ready, read-only distribution",
                             "  - DOCX — Best for editable documents in Microsoft Word",
                             "  - HTML — Best for web viewing and embedding",
+                            "  - Email HTML — For email campaigns with inlined styles (Outlook, Gmail)",
                             "",
                             "For data extraction:",
                             "  - CSV  — Lightweight tabular data from Markdown tables",
@@ -669,9 +922,41 @@ function setupServerHandlers(server: Server) {
                             "  - LaTeX — For academic papers and typesetting",
                             "  - RTF  — For legacy word processors and email clients",
                             "",
+                            "For platform-specific sharing:",
+                            "  - Slack      — Paste into Slack messages (*bold*, _italic_, <url|text>)",
+                            "  - Discord    — Discord-compatible markdown (styled headers, code blocks)",
+                            "  - JIRA       — Atlassian JIRA ticket descriptions and comments",
+                            "  - Confluence — Atlassian Confluence wiki pages",
+                            "  - MediaWiki  — Wikipedia and MediaWiki-based wikis",
+                            "  - BBCode     — Forum posts (phpBB, vBulletin, etc.)",
+                            "  - Textile    — Redmine and some CMS platforms",
+                            "  - Org Mode   — Emacs Org Mode files",
+                            "",
+                            "For documentation systems:",
+                            "  - AsciiDoc — Alternative lightweight markup (used by Antora, etc.)",
+                            "  - RST      — reStructuredText for Sphinx/Python documentation",
+                            "",
+                            "For document analysis:",
+                            "  - extract_code_blocks — Pull code snippets from docs or LLM output",
+                            "  - extract_links — Get all URLs for link checking or SEO analysis",
+                            "  - generate_toc — Auto-generate Table of Contents from headings",
+                            "  - analyze_document — Word count, reading time, element statistics",
+                            "  - extract_structure — Full document architecture overview",
+                            "",
+                            "For repair and quality:",
+                            "  - repair_markdown — Fix broken LLM output (unclosed fences, bad tables)",
+                            "  - lint_markdown — Find issues with severity/rule/fixable info",
+                            "",
+                            "For import:",
+                            "  - html_to_markdown — Convert HTML content back to Markdown",
+                            "",
                             "Tips:",
                             "  - Binary formats (PDF, DOCX, XLSX, PNG) should use output_path",
                             "  - PDF and PNG require a Chromium browser on the system",
+                            "  - Set PUPPETEER_EXECUTABLE_PATH to override browser detection",
+                            "  - Use harmonize_markdown to clean up formatting before conversion",
+                            "  - Use repair_markdown to fix broken LLM output before processing",
+                            "  - Use lint_markdown to check quality before sharing documents",
                         ].join("\n"),
                     },
                 ],
@@ -735,7 +1020,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const serverCard = {
             name: "markdown-formatter-mcp",
             displayName: "AI Answer Copier — Markdown Formatter",
-            description: "MCP Server that converts Markdown to 14 formats: PDF, DOCX, HTML, LaTeX, CSV, JSON, XML, XLSX, RTF, PNG, TXT, MD, and more. Built for educators, developers, and AI workflows.",
+            description: "MCP Server with 33 tools: convert Markdown to 23 formats (PDF, DOCX, HTML, Slack, Discord, JIRA, Confluence, AsciiDoc, RST, MediaWiki, BBCode, Textile, Org Mode, Email HTML, and more), plus document analysis, repair/lint, and HTML import. Built for educators, developers, and AI workflows.",
             homepage: "https://ai-answer-copier.vercel.app",
             repository: "https://github.com/XJTLUmedia/AI_answer_copier",
             icons: {
@@ -759,11 +1044,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     { name: "convert_to_html", description: "Convert Markdown to complete, styled HTML document" },
                     { name: "convert_to_md", description: "Export Markdown content, optionally harmonized" },
                     { name: "generate_html", description: "Generate self-contained HTML document (read-only, no file I/O)" },
+                    { name: "convert_to_email_html", description: "Convert Markdown to email-optimized HTML with inlined styles" },
+                    { name: "convert_to_slack", description: "Convert Markdown to Slack mrkdwn format" },
+                    { name: "convert_to_discord", description: "Convert Markdown to Discord-compatible formatting" },
+                    { name: "convert_to_jira", description: "Convert Markdown to Atlassian JIRA markup" },
+                    { name: "convert_to_confluence", description: "Convert Markdown to Atlassian Confluence wiki markup" },
+                    { name: "convert_to_asciidoc", description: "Convert Markdown to AsciiDoc format" },
+                    { name: "convert_to_rst", description: "Convert Markdown to reStructuredText" },
+                    { name: "convert_to_mediawiki", description: "Convert Markdown to MediaWiki markup" },
+                    { name: "convert_to_bbcode", description: "Convert Markdown to BBCode for forums" },
+                    { name: "convert_to_textile", description: "Convert Markdown to Textile markup" },
+                    { name: "convert_to_orgmode", description: "Convert Markdown to Emacs Org Mode format" },
+                    { name: "html_to_markdown", description: "Convert HTML content back to Markdown" },
+                    { name: "repair_markdown", description: "Fix broken Markdown from LLM output or copy-paste" },
+                    { name: "lint_markdown", description: "Lint Markdown and report issues with severity and location" },
+                    { name: "extract_code_blocks", description: "Extract all code blocks with language and line info" },
+                    { name: "extract_links", description: "Extract all links and images with type classification" },
+                    { name: "generate_toc", description: "Generate Table of Contents from Markdown headings" },
+                    { name: "analyze_document", description: "Comprehensive document statistics (words, lines, reading time)" },
+                    { name: "extract_structure", description: "Full document structure overview (stats, outline, summaries)" },
                 ],
                 prompts: [
                     { name: "convert-document", description: "Convert a Markdown document to a specified output format" },
                     { name: "extract-tables", description: "Extract tables from Markdown as CSV or XLSX" },
                     { name: "format-for-sharing", description: "Harmonize and convert Markdown to PDF + HTML for sharing" },
+                    { name: "analyze-and-repair", description: "Lint, repair, and re-lint a Markdown document" },
+                    { name: "convert-for-platform", description: "Convert Markdown for a specific platform (Slack, Discord, JIRA, etc.)" },
+                    { name: "document-overview", description: "Get a comprehensive overview: stats, TOC, code blocks, links" },
                 ],
                 resources: [
                     { uri: "markdown-formatter://supported-formats", name: "Supported Output Formats" },

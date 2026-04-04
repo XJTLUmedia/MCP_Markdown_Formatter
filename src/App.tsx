@@ -17,7 +17,12 @@ import {
   FileJson,
   Image as ImageIcon,
   Sparkles,
-  LayoutTemplate
+  LayoutTemplate,
+  MessageSquare,
+  Hash,
+  Globe,
+  BookOpen,
+  Mail
 } from 'lucide-react';
 import { TEMPLATES } from './data/templates';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -40,7 +45,18 @@ import {
   exportAsXML,
   exportAsRTF,
   exportAsXLSX,
-  exportAsImage
+  exportAsImage,
+  exportAsSlack,
+  exportAsDiscord,
+  exportAsJira,
+  exportAsConfluence,
+  exportAsAsciiDoc,
+  exportAsRST,
+  exportAsMediaWiki,
+  exportAsBBCode,
+  exportAsTextile,
+  exportAsOrgMode,
+  exportAsEmailHtml
 } from './utils/exporter';
 import 'katex/dist/katex.min.css';
 
@@ -206,6 +222,25 @@ function App() {
       console.error(err);
       setExportMessage('❌ Image export failed');
     }
+    setIsExporting(false);
+  };
+
+  // Platform converter handlers
+  const handleExportSlack = () => { if (!input.trim()) return; exportAsSlack(input, 'document'); showExportSuccess('Slack'); };
+  const handleExportDiscord = () => { if (!input.trim()) return; exportAsDiscord(input, 'document'); showExportSuccess('Discord'); };
+  const handleExportJira = () => { if (!input.trim()) return; exportAsJira(input, 'document'); showExportSuccess('JIRA'); };
+  const handleExportConfluence = () => { if (!input.trim()) return; exportAsConfluence(input, 'document'); showExportSuccess('Confluence'); };
+  const handleExportAsciiDoc = () => { if (!input.trim()) return; exportAsAsciiDoc(input, 'document'); showExportSuccess('AsciiDoc'); };
+  const handleExportRST = () => { if (!input.trim()) return; exportAsRST(input, 'document'); showExportSuccess('RST'); };
+  const handleExportMediaWiki = () => { if (!input.trim()) return; exportAsMediaWiki(input, 'document'); showExportSuccess('MediaWiki'); };
+  const handleExportBBCode = () => { if (!input.trim()) return; exportAsBBCode(input, 'document'); showExportSuccess('BBCode'); };
+  const handleExportTextile = () => { if (!input.trim()) return; exportAsTextile(input, 'document'); showExportSuccess('Textile'); };
+  const handleExportOrgMode = () => { if (!input.trim()) return; exportAsOrgMode(input, 'document'); showExportSuccess('Org Mode'); };
+  const handleExportEmailHtml = async () => {
+    if (!input.trim()) return;
+    setIsExporting(true);
+    try { await exportAsEmailHtml(input, 'document'); showExportSuccess('Email HTML'); }
+    catch (err) { console.error(err); setExportMessage('❌ Email HTML export failed'); }
     setIsExporting(false);
   };
 
@@ -409,6 +444,61 @@ Example:
               <button onClick={handleExportImage} disabled={!output} className="export-btn" style={{ background: 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)' }} title="PNG Image">
                 <ImageIcon className="w-4 h-4" />
                 <span>Image</span>
+              </button>
+
+              <button onClick={handleExportEmailHtml} disabled={!input.trim() || isExporting} className="export-btn" style={{ background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)' }} title="Email HTML">
+                <Mail className="w-4 h-4" />
+                <span>Email</span>
+              </button>
+
+              <button onClick={handleExportSlack} disabled={!input.trim()} className="export-btn" style={{ background: 'linear-gradient(135deg, #611f69 0%, #4a154b 100%)' }} title="Slack mrkdwn">
+                <MessageSquare className="w-4 h-4" />
+                <span>Slack</span>
+              </button>
+
+              <button onClick={handleExportDiscord} disabled={!input.trim()} className="export-btn" style={{ background: 'linear-gradient(135deg, #5865f2 0%, #4752c4 100%)' }} title="Discord Markdown">
+                <Hash className="w-4 h-4" />
+                <span>Discord</span>
+              </button>
+
+              <button onClick={handleExportJira} disabled={!input.trim()} className="export-btn" style={{ background: 'linear-gradient(135deg, #0052cc 0%, #003d99 100%)' }} title="JIRA Markup">
+                <FileText className="w-4 h-4" />
+                <span>JIRA</span>
+              </button>
+
+              <button onClick={handleExportConfluence} disabled={!input.trim()} className="export-btn" style={{ background: 'linear-gradient(135deg, #0052cc 0%, #172b4d 100%)' }} title="Confluence Markup">
+                <BookOpen className="w-4 h-4" />
+                <span>Confl.</span>
+              </button>
+
+              <button onClick={handleExportAsciiDoc} disabled={!input.trim()} className="export-btn" style={{ background: 'linear-gradient(135deg, #e40046 0%, #b80038 100%)' }} title="AsciiDoc">
+                <FileCode className="w-4 h-4" />
+                <span>AsciiDoc</span>
+              </button>
+
+              <button onClick={handleExportRST} disabled={!input.trim()} className="export-btn" style={{ background: 'linear-gradient(135deg, #0a7bbf 0%, #085a8c 100%)' }} title="reStructuredText">
+                <FileCode className="w-4 h-4" />
+                <span>RST</span>
+              </button>
+
+              <button onClick={handleExportMediaWiki} disabled={!input.trim()} className="export-btn" style={{ background: 'linear-gradient(135deg, #339966 0%, #267a50 100%)' }} title="MediaWiki">
+                <Globe className="w-4 h-4" />
+                <span>Wiki</span>
+              </button>
+
+              <button onClick={handleExportBBCode} disabled={!input.trim()} className="export-btn" style={{ background: 'linear-gradient(135deg, #78350f 0%, #5c2d0d 100%)' }} title="BBCode">
+                <FileText className="w-4 h-4" />
+                <span>BBCode</span>
+              </button>
+
+              <button onClick={handleExportTextile} disabled={!input.trim()} className="export-btn" style={{ background: 'linear-gradient(135deg, #b91c1c 0%, #991b1b 100%)' }} title="Textile">
+                <FileText className="w-4 h-4" />
+                <span>Textile</span>
+              </button>
+
+              <button onClick={handleExportOrgMode} disabled={!input.trim()} className="export-btn" style={{ background: 'linear-gradient(135deg, #77aa99 0%, #5c8577 100%)' }} title="Emacs Org Mode">
+                <FileType className="w-4 h-4" />
+                <span>Org</span>
               </button>
 
               <button onClick={handleCopy} disabled={!output} className="export-btn export-btn-copy" title="Copy Rich Text">
