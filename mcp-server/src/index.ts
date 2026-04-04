@@ -7,6 +7,7 @@ import {
     ListPromptsRequestSchema,
     GetPromptRequestSchema,
     ListResourcesRequestSchema,
+    ListResourceTemplatesRequestSchema,
     ReadResourceRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { unified } from 'unified';
@@ -1064,6 +1065,10 @@ server.setRequestHandler(GetPromptRequestSchema, async (request) => {
 });
 
 // ── Resources ────────────────────────────────────────────────────────
+server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => {
+    return { resourceTemplates: [] };
+});
+
 server.setRequestHandler(ListResourcesRequestSchema, async () => {
     return {
         resources: [
