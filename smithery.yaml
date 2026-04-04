@@ -1,5 +1,5 @@
 startCommand:
-  type: stdio
+  type: http
   configSchema:
     type: object
     properties:
@@ -9,16 +9,6 @@ startCommand:
         description: >-
           Optional absolute path to a Chrome, Edge, or Chromium executable
           for PDF and PNG rendering. If not set, the server auto-detects the
-          browser from common installation locations on Windows, macOS, and Linux.
+          browser from common installation locations.
     required: []
-  commandFunction: |
-    (config) => ({
-      command: "node",
-      args: ["dist/index.js"],
-      env: {
-        ...process.env,
-        ...(config.PUPPETEER_EXECUTABLE_PATH
-          ? { PUPPETEER_EXECUTABLE_PATH: config.PUPPETEER_EXECUTABLE_PATH }
-          : {})
-      }
-    })
+  deploymentUrl: https://ai-answer-copier.vercel.app/api/mcp
