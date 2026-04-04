@@ -8,7 +8,7 @@
 [![Glama](https://glama.ai/mcp/servers/XJTLUmedia/AI_answer_copier/badge)](https://glama.ai/mcp/servers/XJTLUmedia/AI_answer_copier)
 [![GitHub](https://img.shields.io/github/stars/XJTLUmedia/AI_answer_copier?style=social)](https://github.com/XJTLUmedia/AI_answer_copier)
 
-**A Model Context Protocol (MCP) server that gives your AI assistant the power to convert Markdown into 14 professional document formats** — PDF, DOCX, HTML, LaTeX, CSV, JSON, XML, XLSX, RTF, PNG, and more. Stop copy-pasting. Let the AI do the exporting.
+**A Model Context Protocol (MCP) server that gives your AI assistant 33 powerful tools** — convert Markdown to 23+ document formats (PDF, DOCX, HTML, LaTeX, CSV, JSON, XML, XLSX, RTF, PNG, Email HTML…), 10 platform-native formats (Slack, Discord, JIRA, Confluence, AsciiDoc, RST, MediaWiki, BBCode, Textile, Org Mode), plus HTML import, markdown repair & lint, and document analysis. Stop copy-pasting. Let the AI do the exporting.
 
 ---
 
@@ -27,13 +27,17 @@ You asked an AI to generate 20 exam questions. It delivered — beautifully. But
 
 ---
 
-## 14 Export Tools at Your AI's Fingertips
+## 33 MCP Tools at Your AI's Fingertips
+
+### Document Conversion (15 tools)
 
 | Tool | Output Format | Use Case |
 |---|---|---|
 | `harmonize_markdown` | Clean `.md` | Standardize messy AI output |
 | `convert_to_txt` | Plain `.txt` | Strip all formatting |
 | `convert_to_html` | `.html` | Web pages, email templates |
+| `generate_html` | Full HTML doc | Self-contained pages with inline styles |
+| `convert_to_email_html` | Email `.html` | Outlook/Gmail/Apple Mail compatible |
 | `convert_to_pdf` | `.pdf` | Print-ready exams, handouts |
 | `convert_to_docx` | `.docx` | Microsoft Word documents |
 | `convert_to_latex` | `.tex` | Academic papers, journals |
@@ -44,7 +48,34 @@ You asked an AI to generate 20 exam questions. It delivered — beautifully. But
 | `convert_to_xlsx` | `.xlsx` | Excel spreadsheets |
 | `convert_to_image` | `.png` | Social media, presentations |
 | `convert_to_md` | `.md` | Documentation, GitHub |
-| `generate_html` | Full HTML doc | Self-contained pages with inline styles |
+
+### Platform Converters (10 tools)
+
+| Tool | Target | Use Case |
+|---|---|---|
+| `convert_to_slack` | Slack | mrkdwn format for Slack messages |
+| `convert_to_discord` | Discord | Styled markdown for Discord |
+| `convert_to_jira` | JIRA | Wiki markup for Atlassian JIRA |
+| `convert_to_confluence` | Confluence | Wiki markup with panels & macros |
+| `convert_to_asciidoc` | AsciiDoc | Technical documentation format |
+| `convert_to_rst` | reStructuredText | Sphinx / Read the Docs |
+| `convert_to_mediawiki` | MediaWiki | Wikipedia-style markup |
+| `convert_to_bbcode` | BBCode | phpBB / vBulletin forums |
+| `convert_to_textile` | Textile | Redmine, Basecamp |
+| `convert_to_orgmode` | Emacs Org Mode | Org-style headers & source blocks |
+
+### Import, Repair & Analysis (8 tools)
+
+| Tool | Description |
+|---|---|
+| `html_to_markdown` | Convert HTML back to Markdown |
+| `repair_markdown` | Auto-fix broken Markdown syntax |
+| `lint_markdown` | Check Markdown for style & syntax issues |
+| `extract_code_blocks` | Pull out all fenced code blocks |
+| `extract_links` | Extract all URLs and link text |
+| `generate_toc` | Generate a table of contents |
+| `analyze_document` | Word count, reading time, structure stats |
+| `extract_structure` | Extract document heading hierarchy |
 
 Every tool accepts a `markdown` string input and an optional `output_path` to save directly to disk. Binary formats (PDF, DOCX, XLSX, PNG) intelligently guide the AI to save files rather than dumping raw base64.
 
@@ -104,7 +135,7 @@ Edit `%APPDATA%\Claude\claude_desktop_config.json` (Windows) or `~/Library/Appli
 }
 ```
 
-Restart Claude Desktop. You'll see a 🔌 icon — all 14 conversion tools are now available to Claude.
+Restart Claude Desktop. You'll see a 🔌 icon — all 33 tools are now available to Claude.
 
 ### VS Code (GitHub Copilot)
 
@@ -204,12 +235,27 @@ Zero runtime dependencies on external APIs. Everything runs locally on your mach
 - **XML** → Enterprise integrations, SOAP services
 - **HTML** → Embed in web apps, email templates
 - **LaTeX** → Academic publishing, research papers
+- **AsciiDoc / RST** → Sphinx, Read the Docs, technical manuals
+- **Org Mode** → Emacs workflows
 
 ### For Content Creators
 - **PNG** → Social media posts, slide decks
-- **HTML** → Blog posts, newsletters
+- **HTML / Email HTML** → Blog posts, newsletters, email campaigns
 - **Markdown** → Documentation, READMEs, wikis
 - **RTF** → Universal rich text compatibility
+
+### For Teams & Collaboration
+- **Slack** → Paste-ready mrkdwn messages
+- **Discord** → Styled markdown for servers and channels
+- **JIRA / Confluence** → Atlassian wiki markup
+- **MediaWiki** → Wikipedia-style documentation
+- **BBCode / Textile** → Forum posts (phpBB, Redmine, Basecamp)
+
+### Import & Quality
+- **HTML → Markdown** → Round-trip HTML content back to Markdown
+- **Repair** → Auto-fix broken Markdown syntax
+- **Lint** → Validate style and syntax
+- **Analysis** → Word count, reading time, structure extraction
 
 ---
 
@@ -221,29 +267,32 @@ Zero runtime dependencies on external APIs. Everything runs locally on your mach
 │  (Claude, Copilot,  │
 │   Cursor, etc.)     │
 └────────┬────────────┘
-         │ MCP Protocol (stdio)
+         │ MCP Protocol (stdio / HTTP)
          ▼
-┌─────────────────────┐
-│  AI Answer Copier    │
-│  MCP Server          │
-│                      │
-│  ┌─ remark/rehype ──┐│
-│  │  Markdown Parser  ││
-│  └───────────────────┘│
-│  ┌─ docx ───────────┐│
-│  │  Word Generator   ││
-│  └───────────────────┘│
-│  ┌─ puppeteer ──────┐│
-│  │  PDF/PNG Renderer ││
-│  └───────────────────┘│
-│  ┌─ xlsx ───────────┐│
-│  │  Excel Generator  ││
-│  └───────────────────┘│
-│  ┌─ Custom Parsers ─┐│
-│  │  CSV/JSON/XML/    ││
-│  │  RTF/LaTeX/TXT    ││
-│  └───────────────────┘│
-└─────────────────────┘
+┌──────────────────────────────────┐
+│  AI Answer Copier MCP Server     │
+│  33 tools                        │
+│                                  │
+│  ┌─ Document Conversion (15) ───┐│
+│  │  remark/rehype · docx · xlsx ││
+│  │  puppeteer · KaTeX · CSV/XML ││
+│  │  JSON · RTF · LaTeX · TXT    ││
+│  │  Email HTML (inline styles)  ││
+│  └──────────────────────────────┘│
+│  ┌─ Platform Converters (10) ───┐│
+│  │  Slack · Discord · JIRA      ││
+│  │  Confluence · AsciiDoc · RST ││
+│  │  MediaWiki · BBCode          ││
+│  │  Textile · Org Mode          ││
+│  └──────────────────────────────┘│
+│  ┌─ Import & Repair (3) ────────┐│
+│  │  HTML→MD · Repair · Lint     ││
+│  └──────────────────────────────┘│
+│  ┌─ Analysis (5) ───────────────┐│
+│  │  Code Blocks · Links · TOC   ││
+│  │  Document Stats · Structure  ││
+│  └──────────────────────────────┘│
+└──────────────────────────────────┘
 ```
 
 ---
