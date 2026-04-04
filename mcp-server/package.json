@@ -1,6 +1,6 @@
 {
     "name": "@xjtlumedia/markdown-mcp-server",
-    "version": "1.0.5",
+    "version": "2.0.0",
     "description": "AI Answer Copier — MCP Server that converts Markdown to 14 formats: PDF, DOCX, HTML, LaTeX, CSV, JSON, XML, XLSX, RTF, PNG and more. Built for educators and developers.",
     "mcpName": "io.github.XJTLUmedia/markdown-formatter",
     "type": "module",
