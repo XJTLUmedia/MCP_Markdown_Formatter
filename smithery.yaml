@@ -3,12 +3,62 @@ startCommand:
   configSchema:
     type: object
     properties:
-      PUPPETEER_EXECUTABLE_PATH:
+      pdf_page_format:
         type: string
-        title: Chrome/Chromium Executable Path
+        title: PDF Page Format
         description: >-
-          Optional absolute path to a Chrome, Edge, or Chromium executable
-          for PDF and PNG rendering. If not set, the server auto-detects the
-          browser from common installation locations.
+          Paper size for PDF output. Controls page dimensions when converting
+          Markdown to PDF via headless Chromium.
+        default: A4
+        enum:
+          - A4
+          - Letter
+          - Legal
+          - Tabloid
+      pdf_margin:
+        type: string
+        title: PDF Margin
+        description: >-
+          Margin size for PDF output in CSS units. Applied to all four sides
+          of the page. Examples: '20mm', '1in', '0.5cm'.
+        default: "20mm"
+      html_theme:
+        type: string
+        title: HTML Theme
+        description: >-
+          Visual theme for HTML, PDF, and PNG image output. 'light' uses a
+          white background with dark text; 'dark' uses a dark background with
+          light text. Affects all browser-rendered outputs.
+        default: light
+        enum:
+          - light
+          - dark
+      default_title:
+        type: string
+        title: Default Document Title
+        description: >-
+          Fallback title used when no explicit title parameter is provided in
+          a tool call. Appears in PDF metadata, HTML <title>, and XML/JSON
+          root element names.
+        default: document
+      code_style:
+        type: string
+        title: Code Block Style
+        description: >-
+          Syntax highlighting theme for fenced code blocks in HTML, PDF, and
+          image output. Controls the color scheme of rendered source code.
+        default: github
+        enum:
+          - github
+          - monokai
+          - dracula
+          - solarized
+      max_input_bytes:
+        type: number
+        title: Max Input Size (bytes)
+        description: >-
+          Maximum allowed input size in bytes. Documents exceeding this limit
+          are rejected to prevent timeouts. Default is 1 GB.
+        default: 1073741824
     required: []
   deploymentUrl: https://ai-answer-copier.vercel.app/api/mcp

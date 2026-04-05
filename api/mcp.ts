@@ -79,6 +79,28 @@ interface McpInstance {
     transport: any; // StreamableHTTPServerTransport
     isNew: boolean;
     lastUsed: number;
+    config: ServerConfig;
+}
+
+// Session-level configuration (from Smithery Gateway query params)
+interface ServerConfig {
+    pdf_page_format: string;
+    pdf_margin: string;
+    html_theme: string;
+    default_title: string;
+    code_style: string;
+    max_input_bytes: number;
+}
+
+function getDefaultConfig(): ServerConfig {
+    return {
+        pdf_page_format: 'A4',
+        pdf_margin: '20mm',
+        html_theme: 'light',
+        default_title: 'document',
+        code_style: 'github',
+        max_input_bytes: 1024 * 1024 * 1024,
+    };
 }
 
 // Global registry of active instances in this warm lambda
@@ -145,7 +167,7 @@ async function handleOutput(
     }
 }
 
-function setupServerHandlers(server: Server) {
+function setupServerHandlers(server: Server, config: ServerConfig) {
     // --- Shared parameter description constants ---
     const PARAM_MARKDOWN = "The raw Markdown source text to convert. Supports GitHub-Flavored Markdown (tables, task lists, strikethrough) and KaTeX math expressions. Pass the full document content as a string, not a file path.";
     const PARAM_OUTPUT_PATH_TEXT = "Optional. Absolute or relative file path (e.g. './output.txt') where the result will be saved. Parent directories are created automatically. If omitted, the converted text content is returned directly in the response as a string.";
@@ -562,10 +584,10 @@ function setupServerHandlers(server: Server) {
             if (!markdown && !noMarkdownTools.includes(name)) throw new Error("Markdown content is required");
 
             // Guard against oversized inputs to prevent timeouts and memory pressure
-            const MAX_INPUT_BYTES = 1024 * 1024 * 1024; // 1 GB
+            const maxBytes = config.max_input_bytes;
             const inputToCheck = markdown ?? (args as any).html ?? '';
-            if (Buffer.byteLength(inputToCheck, 'utf8') > MAX_INPUT_BYTES) {
-                throw new Error('Input too large: content exceeds the 1 GB limit. Please split the document into smaller sections.');
+            if (Buffer.byteLength(inputToCheck, 'utf8') > maxBytes) {
+                throw new Error(`Input too large: content exceeds the ${Math.round(maxBytes / (1024 * 1024))} MB limit. Please split the document into smaller sections.`);
             }
 
             if (name === "harmonize_markdown") {
@@ -585,13 +607,25 @@ function setupServerHandlers(server: Server) {
             }
 
             if (name === "convert_to_csv") return handleOutput(generateCSV(markdown), outputPath);
-            if (name === "convert_to_json") return handleOutput(generateJSON(markdown, (args as any).title), outputPath);
-            if (name === "convert_to_xml") return handleOutput(generateXML(markdown, (args as any).title), outputPath);
+            if (name === "convert_to_json") return handleOutput(generateJSON(markdown, (args as any).title || config.default_title), outputPath);
+            if (name === "convert_to_xml") return handleOutput(generateXML(markdown, (args as any).title || config.default_title), outputPath);
             if (name === "convert_to_xlsx") return handleOutput(generateXLSXIndex(markdown), outputPath, { format: 'xlsx', description: 'Excel spreadsheet' });
 
             if (name === "convert_to_html" || name === "convert_to_pdf" || name === "convert_to_image") {
                 const htmlFile = await unified().use(remarkParse).use(remarkGfm).use(remarkRehype).use(rehypeKatex).use(rehypeStringify).process(markdown);
-                const htmlDoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI+WdtXRGWt2kTvGFasHpSy3SV" crossorigin="anonymous"><style>body { font-family: system-ui; padding: 40px; line-height: 1.6; max-width: 800px; margin: 0 auto; background: white; color: black; } img { max-width: 100%; } pre { background: #f4f4f4; padding: 15px; border-radius: 5px; overflow-x: auto; } table { border-collapse: collapse; width: 100%; margin: 1em 0; } th, td { border: 1px solid #ddd; padding: 8px; text-align: left; } th { background-color: #f2f2f2; } blockquote { border-left: 4px solid #ddd; margin: 0; padding-left: 1em; color: #666; }</style></head><body>${String(htmlFile)}</body></html>`;
+                const isDark = config.html_theme === 'dark';
+                const themeStyles = isDark
+                    ? 'background: #1a1a2e; color: #e0e0e0;'
+                    : 'background: white; color: black;';
+                const preStyles = isDark
+                    ? 'background: #16213e; color: #e0e0e0;'
+                    : 'background: #f4f4f4;';
+                const thStyles = isDark
+                    ? 'background-color: #0f3460;'
+                    : 'background-color: #f2f2f2;';
+                const borderColor = isDark ? '#334155' : '#ddd';
+                const bqColor = isDark ? '#94a3b8' : '#666';
+                const htmlDoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI+WdtXRGWt2kTvGFasHpSy3SV" crossorigin="anonymous"><style>body { font-family: system-ui; padding: 40px; line-height: 1.6; max-width: 800px; margin: 0 auto; ${themeStyles} } img { max-width: 100%; } pre { ${preStyles} padding: 15px; border-radius: 5px; overflow-x: auto; } table { border-collapse: collapse; width: 100%; margin: 1em 0; } th, td { border: 1px solid ${borderColor}; padding: 8px; text-align: left; } th { ${thStyles} } blockquote { border-left: 4px solid ${borderColor}; margin: 0; padding-left: 1em; color: ${bqColor}; }</style></head><body>${String(htmlFile)}</body></html>`;
 
                 if (name === "convert_to_html") return handleOutput(htmlDoc, outputPath);
 
@@ -602,7 +636,8 @@ function setupServerHandlers(server: Server) {
                     let resultBuffer: Buffer;
 
                     if (name === "convert_to_pdf") {
-                        resultBuffer = Buffer.from(await page.pdf({ format: 'A4' }));
+                        const m = config.pdf_margin;
+                        resultBuffer = Buffer.from(await page.pdf({ format: config.pdf_page_format as any, margin: { top: m, right: m, bottom: m, left: m } }));
                         return handleOutput(resultBuffer, outputPath, { format: 'pdf', description: 'PDF document' });
                     } else {
                         resultBuffer = Buffer.from(await page.screenshot({ fullPage: true, encoding: 'binary' }));
@@ -621,22 +656,24 @@ function setupServerHandlers(server: Server) {
 
             if (name === "generate_html") {
                 const htmlFile = await unified().use(remarkParse).use(remarkGfm).use(remarkRehype).use(rehypeKatex).use(rehypeStringify).process(markdown);
+                const isDark = config.html_theme === 'dark';
+                const docTitle = (args as any).title || config.default_title || 'Document';
                 const htmlDoc = `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${(args as any).title || 'Document'}</title>
+    <title>${docTitle}</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI+WdtXRGWt2kTvGFasHpSy3SV" crossorigin="anonymous">
     <style>
-        body { font-family: system-ui, -apple-system, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; line-height: 1.6; color: #1a1a1a; }
-        h1, h2, h3 { color: #111; margin-top: 2em; }
-        pre { background: #f4f4f4; padding: 15px; border-radius: 5px; overflow-x: auto; }
-        code { font-family: monospace; background: #eee; padding: 2px 4px; border-radius: 3px; }
+        body { font-family: system-ui, -apple-system, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; line-height: 1.6; ${isDark ? 'background: #1a1a2e; color: #e0e0e0;' : 'color: #1a1a1a;'} }
+        h1, h2, h3 { ${isDark ? 'color: #f0f0f0;' : 'color: #111;'} margin-top: 2em; }
+        pre { ${isDark ? 'background: #16213e; color: #e0e0e0;' : 'background: #f4f4f4;'} padding: 15px; border-radius: 5px; overflow-x: auto; }
+        code { font-family: monospace; ${isDark ? 'background: #16213e;' : 'background: #eee;'} padding: 2px 4px; border-radius: 3px; }
         table { border-collapse: collapse; width: 100%; margin: 1em 0; }
-        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
-        th { background: #f8f8f8; }
-        blockquote { border-left: 4px solid #ddd; margin: 0; padding-left: 1em; color: #666; }
+        th, td { border: 1px solid ${isDark ? '#334155' : '#ddd'}; padding: 12px; text-align: left; }
+        th { ${isDark ? 'background: #0f3460;' : 'background: #f8f8f8;'} }
+        blockquote { border-left: 4px solid ${isDark ? '#334155' : '#ddd'}; margin: 0; padding-left: 1em; color: ${isDark ? '#94a3b8' : '#666'}; }
         img { max-width: 100%; }
     </style>
 </head>
@@ -1016,13 +1053,15 @@ function setupServerHandlers(server: Server) {
 
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 
-async function getOrCreateInstance(sessionId: string): Promise<McpInstance> {
+async function getOrCreateInstance(sessionId: string, config?: ServerConfig): Promise<McpInstance> {
     if (instances.has(sessionId)) {
         const instance = instances.get(sessionId)!;
         instance.isNew = false;
         instance.lastUsed = Date.now();
         return instance;
     }
+
+    const sessionConfig = config || getDefaultConfig();
 
     const transport = new WebStandardStreamableHTTPServerTransport({
         sessionIdGenerator: () => sessionId,
@@ -1042,10 +1081,10 @@ async function getOrCreateInstance(sessionId: string): Promise<McpInstance> {
         }
     );
 
-    setupServerHandlers(server);
+    setupServerHandlers(server, sessionConfig);
     await server.connect(transport);
 
-    const instance = { server, transport, isNew: true, lastUsed: Date.now() };
+    const instance = { server, transport, isNew: true, lastUsed: Date.now(), config: sessionConfig };
     instances.set(sessionId, instance);
 
     return instance;
@@ -1132,6 +1171,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const sessionId = providedSessionId || `s_${Math.random().toString(36).substring(2, 10)}`;
     res.setHeader('mcp-session-id', sessionId);
 
+    // Read session configuration from query params (forwarded by Smithery Gateway)
+    const sessionConfig: ServerConfig = {
+        pdf_page_format: (req.query.pdf_page_format as string) || 'A4',
+        pdf_margin: (req.query.pdf_margin as string) || '20mm',
+        html_theme: (req.query.html_theme as string) || 'light',
+        default_title: (req.query.default_title as string) || 'document',
+        code_style: (req.query.code_style as string) || 'github',
+        max_input_bytes: Number(req.query.max_input_bytes) || 1024 * 1024 * 1024,
+    };
+
     // Evict stale sessions on every request (cheap O(n) scan, n stays small in practice)
     cleanupExpiredSessions();
 
@@ -1185,7 +1234,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
-        const instance = await getOrCreateInstance(sessionId);
+        const instance = await getOrCreateInstance(sessionId, sessionConfig);
 
         // Anti-409: Close existing stream if this is a new GET for the same session
         if (req.method === 'GET' && isEventStream) {
