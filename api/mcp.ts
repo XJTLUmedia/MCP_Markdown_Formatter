@@ -1205,6 +1205,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             if (typeof srv._initialized !== 'undefined') {
                 srv._initialized = true;
             }
+            // CRITICAL: Also bypass the Transport's own initialization gate.
+            // WebStandardStreamableHTTPServerTransport.validateSession() checks
+            // transport._initialized and transport.sessionId — without these,
+            // all non-initialize requests (resources/list, prompts/list, etc.)
+            // return 400 "Server not initialized" or 400 "Mcp-Session-Id required".
+            const trn = instance.transport as any;
+            if (typeof trn._initialized !== 'undefined') {
+                trn._initialized = true;
+            }
+            if (trn.sessionIdGenerator) {
+                trn.sessionId = sessionId;
+            }
         }
 
         // Build absolute URL for the Web Request
