@@ -18,6 +18,7 @@ export function repairMarkdown(md: string): string {
     out = repairHeadings(out);
     out = repairListIndentation(out);
     out = repairBrokenLinks(out);
+    out = repairBrokenTaskLists(out);
     out = normalizeWhitespace(out);
     return out;
 }
@@ -189,6 +190,18 @@ export function repairBrokenLinks(md: string): string {
     return out;
 }
 
+// Fix broken task list syntax from LLM output
+export function repairBrokenTaskLists(md: string): string {
+    let out = md;
+    // Fix missing space in checkbox: - [] → - [ ]
+    out = out.replace(/^(\s*[-*+])\s+\[\](\s+)/gm, '$1 [ ]$2');
+    // Fix uppercase X: - [X] → - [x]
+    out = out.replace(/^(\s*[-*+]\s+)\[X\]/gm, '$1[x]');
+    // Fix no space after checkbox: - [x]text → - [x] text
+    out = out.replace(/^(\s*[-*+]\s+\[[ xX]\])([^\s])/gm, '$1 $2');
+    return out;
+}
+
 // Normalize excessive whitespace
 export function normalizeWhitespace(md: string): string {
     let out = md;
@@ -280,6 +293,15 @@ export function lintMarkdown(md: string): LintIssue[] {
             issues.push({
                 line: lineNum, column: 1, severity: 'warning',
                 rule: 'unclosed-emphasis', message: 'Possible unclosed bold (**) markers',
+                fixable: true
+            });
+        }
+
+        // Broken task list syntax
+        if (/^\s*[-*+]\s+\[\]/.test(line)) {
+            issues.push({
+                line: lineNum, column: 1, severity: 'warning',
+                rule: 'broken-task-list', message: 'Missing space in task list checkbox: [] should be [ ]',
                 fixable: true
             });
         }

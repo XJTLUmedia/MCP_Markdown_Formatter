@@ -9,6 +9,34 @@ import remarkRehype from 'remark-rehype';
 import rehypeStringify from 'rehype-stringify';
 
 export async function markdownToEmailHtml(md: string): Promise<string> {
+    // Pre-process highlight syntax (==text==) → <mark> since remark-gfm doesn't handle it
+    let processed = md.replace(/==([^=]+)==/g, '<mark>$1</mark>');
+
+    // Pre-process footnotes: collect definitions, convert refs to superscript, append endnotes
+    const footnoteDefRegex = /^\[\^(\w+)\]:\s*(.+)$/gm;
+    const footnotes: { label: string; text: string }[] = [];
+    let fnMatch;
+    while ((fnMatch = footnoteDefRegex.exec(processed)) !== null) {
+        footnotes.push({ label: fnMatch[1], text: fnMatch[2] });
+    }
+    if (footnotes.length > 0) {
+        // Remove footnote definitions from body
+        processed = processed.replace(/^\[\^(\w+)\]:\s*(.+)$/gm, '');
+        // Replace footnote references with superscript numbers
+        for (let idx = 0; idx < footnotes.length; idx++) {
+            const label = footnotes[idx].label;
+            processed = processed.replace(
+                new RegExp(`\\[\\^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]`, 'g'),
+                `<sup>[${idx + 1}]</sup>`
+            );
+        }
+        // Append endnotes section
+        processed += '\n\n---\n\n';
+        for (let idx = 0; idx < footnotes.length; idx++) {
+            processed += `${idx + 1}. ${footnotes[idx].text}\n`;
+        }
+    }
+
     // First convert to basic HTML
     const htmlFile = await unified()
         .use(remarkParse)
@@ -17,7 +45,7 @@ export async function markdownToEmailHtml(md: string): Promise<string> {
         .use(remarkRehype)
         // @ts-ignore
         .use(rehypeStringify)
-        .process(md);
+        .process(processed);
 
     let html = String(htmlFile);
 
@@ -106,6 +134,21 @@ function inlineEmailStyles(html: string): string {
     // Strong and em (just ensure they work)
     out = out.replace(/<strong([^>]*)>/gi, '<strong$1 style="font-weight:bold;">');
     out = out.replace(/<em([^>]*)>/gi, '<em$1 style="font-style:italic;">');
+
+    // Strikethrough
+    out = out.replace(/<del([^>]*)>/gi, '<del$1 style="text-decoration:line-through;color:#999999;">');
+
+    // Highlight / mark
+    out = out.replace(/<mark([^>]*)>/gi, '<mark$1 style="background-color:#fff3cd;padding:1px 4px;border-radius:2px;">');
+
+    // Superscript and subscript
+    out = out.replace(/<sup([^>]*)>/gi, '<sup$1 style="font-size:75%;line-height:0;position:relative;vertical-align:baseline;top:-0.5em;">');
+    out = out.replace(/<sub([^>]*)>/gi, '<sub$1 style="font-size:75%;line-height:0;position:relative;vertical-align:baseline;bottom:-0.25em;">');
+
+    // Task list checkboxes
+    out = out.replace(/<input[^>]*checked[^>]*disabled[^>]*\/?>/gi, '&#9745; ');
+    out = out.replace(/<input[^>]*disabled[^>]*checked[^>]*\/?>/gi, '&#9745; ');
+    out = out.replace(/<input[^>]*type="checkbox"[^>]*\/?>/gi, '&#9744; ');
 
     return out;
 }

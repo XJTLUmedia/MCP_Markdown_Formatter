@@ -27,7 +27,7 @@ import {
     generateXML,
     generateXLSXIndex,
     cleanMarkdownText
-} from "../src/utils/core-exports.js";
+} from "../mcp-server/src/core-exports.js";
 import {
     markdownToSlack,
     markdownToDiscord,
@@ -170,24 +170,26 @@ async function handleOutput(
 function setupServerHandlers(server: Server, config: ServerConfig) {
     // --- Shared parameter description constants ---
     const PARAM_MARKDOWN = "The raw Markdown source text to convert. Supports GitHub-Flavored Markdown (tables, task lists, strikethrough) and KaTeX math expressions. Pass the full document content as a string, not a file path.";
-    const PARAM_OUTPUT_PATH_TEXT = "Optional. Absolute or relative file path (e.g. './output.txt') where the result will be saved. Parent directories are created automatically. If omitted, the converted text content is returned directly in the response as a string.";
+    const PARAM_OUTPUT_PATH_TEXT = "Optional. Absolute or relative file path (e.g. './output.txt') where the result will be saved. Parent directories are created automatically. If omitted, the converted text content is returned directly in the response as a string. If provided, the file is written to disk and a JSON summary with { success, file_path, file_size_bytes, format } is returned instead.";
     const PARAM_OUTPUT_PATH_BINARY = (fmt: string) =>
-        `Optional. Absolute or relative file path (e.g. './output.${fmt}') where the binary file will be saved. Parent directories are created automatically. If provided, the file is written to disk and a JSON summary is returned. If omitted, a JSON object with { format, file_size_bytes, hint, base64_preview } is returned. Binary formats (${fmt.toUpperCase()}) should almost always specify output_path.`;
+        `Optional. Absolute or relative file path (e.g. './output.${fmt}') where the binary file will be saved. Parent directories are created automatically. If provided, the file is written to disk and a JSON summary with { success, file_path, file_size_bytes, format } is returned. If omitted, a JSON object with { format, file_size_bytes, hint, base64_preview } is returned — the hint will instruct you to call the tool again with output_path to save the file. Binary formats (${fmt.toUpperCase()}) should almost always specify output_path.`;
     const PARAM_TITLE = "Optional. A document title string. Used as the root element name or document metadata title in the output. Defaults to 'document' if omitted.";
 
+    // Text-output tool annotations: no file write when output_path is omitted → read-only; with output_path → side effect
     const TEXT_TOOL_ANNOTATIONS = {
         title: undefined as string | undefined,
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
+        readOnlyHint: false,      // can write files when output_path is provided
+        destructiveHint: false,    // overwrites files at output_path without warning
+        idempotentHint: true,      // same input always produces the same output
+        openWorldHint: false,      // does not interact with external services
     };
+    // Binary-output tool annotations (PDF/PNG use Puppeteer which launches a browser)
     const BROWSER_TOOL_ANNOTATIONS = {
         title: undefined as string | undefined,
         readOnlyHint: false,
         destructiveHint: false,
         idempotentHint: true,
-        openWorldHint: false,
+        openWorldHint: false,      // Puppeteer runs a local headless browser, no network needed for rendering
     };
 
     server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -199,9 +201,12 @@ function setupServerHandlers(server: Server, config: ServerConfig) {
                         "Standardize and normalize Markdown syntax without changing the document's meaning. " +
                         "Re-formats headers (ATX-style), normalizes list markers to '-', enforces fenced code blocks with backticks, " +
                         "and applies consistent indentation. " +
-                        "Side effects: when output_path is provided, writes the harmonized Markdown to disk. " +
+                        "Side effects: when output_path is provided, writes the harmonized Markdown to disk (creates parent directories as needed, overwrites existing files). " +
                         "When output_path is omitted, returns the harmonized text as a string with no file I/O. " +
-                        "Returns: harmonized Markdown string (if no output_path), or JSON with { success, file_path, file_size_bytes, format } (if output_path set).",
+                        "Returns: harmonized Markdown string (if no output_path), or JSON with { success, file_path, file_size_bytes, format } (if output_path set). " +
+                        "Use this tool when you need to clean up inconsistent Markdown formatting before further processing. " +
+                        "Prefer convert_to_md with harmonize=true if you also need to save the result, as it combines both steps. " +
+                        "Not suitable for converting Markdown to other formats — use the convert_to_* tools instead.",
                     inputSchema: {
                         type: "object" as const,
                         properties: {
@@ -216,9 +221,12 @@ function setupServerHandlers(server: Server, config: ServerConfig) {
                     name: "convert_to_txt",
                     description:
                         "Convert Markdown to plain text by stripping all formatting — removes headers, bold/italic markers, links, images, code fences, and HTML tags. " +
-                        "The result is a human-readable plain-text string with no markup. " +
-                        "Side effects: when output_path is provided, writes the plain text to disk. When output_path is omitted, returns the plain text string directly. " +
-                        "Returns: plain text string (if no output_path), or JSON { success, file_path, file_size_bytes, format } (if output_path set).",
+                        "The result is a human-readable plain-text string with no markup. This is a destructive conversion: formatting information is permanently lost. " +
+                        "Side effects: when output_path is provided, writes the plain text to disk (creates parent directories, overwrites existing files). " +
+                        "When output_path is omitted, returns the plain text string directly. " +
+                        "Returns: plain text string (if no output_path), or JSON { success, file_path, file_size_bytes, format } (if output_path set). " +
+                        "Use this instead of convert_to_md when you need formatting-free content (e.g. for indexing, search, or clipboard). " +
+                        "Use convert_to_html or convert_to_pdf if you need to preserve the document's visual structure.",
                     inputSchema: {
                         type: "object" as const,
                         properties: {
@@ -234,8 +242,11 @@ function setupServerHandlers(server: Server, config: ServerConfig) {
                     description:
                         "Convert Markdown to Rich Text Format (RTF). Produces an RTF document string preserving basic formatting: " +
                         "bold, italic, headers (as styled paragraphs), lists, and code blocks. " +
-                        "Side effects: when output_path is provided, writes the RTF file to disk. When output_path is omitted, returns the raw RTF markup as a string. " +
-                        "Returns: RTF markup string (if no output_path), or JSON { success, file_path, file_size_bytes, format } (if output_path set).",
+                        "Side effects: when output_path is provided, writes the RTF file to disk (creates parent directories, overwrites existing files). " +
+                        "When output_path is omitted, returns the raw RTF markup as a string. " +
+                        "Returns: RTF markup string (if no output_path), or JSON { success, file_path, file_size_bytes, format } (if output_path set). " +
+                        "Use this when the target application requires RTF (e.g. legacy word processors, email clients). " +
+                        "Prefer convert_to_docx for modern Word documents, or convert_to_html for web display.",
                     inputSchema: {
                         type: "object" as const,
                         properties: {
@@ -250,9 +261,13 @@ function setupServerHandlers(server: Server, config: ServerConfig) {
                     name: "convert_to_latex",
                     description:
                         "Convert Markdown to LaTeX source code. Produces a LaTeX document fragment with \\section, \\textbf, \\textit, " +
-                        "list environments, verbatim code blocks, and table environments. KaTeX math expressions are passed through as native LaTeX math. " +
-                        "Side effects: when output_path is provided, writes the .tex file to disk. When output_path is omitted, returns the LaTeX source as a string. " +
-                        "Returns: LaTeX source string (if no output_path), or JSON { success, file_path, file_size_bytes, format } (if output_path set).",
+                        "\\begin{itemize}/\\begin{enumerate} list environments, verbatim code blocks, and table environments. " +
+                        "KaTeX math expressions in the Markdown are passed through as native LaTeX math. " +
+                        "Side effects: when output_path is provided, writes the .tex file to disk (creates parent directories, overwrites existing files). " +
+                        "When output_path is omitted, returns the LaTeX source as a string. " +
+                        "Returns: LaTeX source string (if no output_path), or JSON { success, file_path, file_size_bytes, format } (if output_path set). " +
+                        "Use this when you need to embed content in a LaTeX workflow or compile to PDF via pdflatex/xelatex externally. " +
+                        "For direct PDF output without a LaTeX toolchain, use convert_to_pdf instead.",
                     inputSchema: {
                         type: "object" as const,
                         properties: {
@@ -269,9 +284,12 @@ function setupServerHandlers(server: Server, config: ServerConfig) {
                         "Convert Markdown to a Microsoft Word DOCX file. Produces a binary .docx document with styled headings, " +
                         "bold/italic text, numbered and bulleted lists, and code formatting. " +
                         "This is a binary format — output_path should almost always be provided. " +
-                        "Side effects: when output_path is provided, writes the DOCX binary to disk. " +
-                        "When output_path is omitted, returns a JSON object with { format, file_size_bytes, hint, base64_preview }. " +
-                        "Returns: JSON write-confirmation (if output_path set), or JSON binary-guidance object (if omitted).",
+                        "Side effects: when output_path is provided, writes the DOCX binary to disk (creates parent directories, overwrites existing files). " +
+                        "When output_path is omitted, returns a JSON object with { format: 'docx', file_size_bytes, hint, base64_preview } — " +
+                        "the hint will tell you to re-call with output_path to save the file. " +
+                        "Returns: JSON write-confirmation (if output_path set), or JSON binary-guidance object (if omitted). " +
+                        "Use this for Word-compatible documents. " +
+                        "Prefer convert_to_rtf for legacy word processors, convert_to_pdf for read-only distribution, or convert_to_html for web.",
                     inputSchema: {
                         type: "object" as const,
                         properties: {
@@ -286,11 +304,16 @@ function setupServerHandlers(server: Server, config: ServerConfig) {
                     name: "convert_to_pdf",
                     description:
                         "Convert Markdown to a PDF document. Renders the Markdown as styled HTML (GFM tables, KaTeX math) and then " +
-                        "prints it to PDF via a headless Chromium browser. " +
+                        "prints it to PDF via a headless Chromium browser (Puppeteer). Requires a locally installed Chrome, Edge, or Chromium — " +
+                        "set PUPPETEER_EXECUTABLE_PATH env var to override auto-detection. " +
                         "This is a binary format — output_path should almost always be provided. " +
-                        "Side effects: launches a transient headless browser process for rendering. " +
-                        "When output_path is provided, writes the PDF to disk. When output_path is omitted, returns JSON { format, file_size_bytes, hint, base64_preview }. " +
-                        "Returns: JSON write-confirmation (if output_path set), or JSON binary-guidance object (if omitted).",
+                        "Side effects: launches a transient headless browser process for rendering (no network requests are made for the conversion itself, " +
+                        "though the HTML references a CDN KaTeX stylesheet which may be fetched). " +
+                        "When output_path is provided, writes the PDF to disk (creates parent directories, overwrites existing files). " +
+                        "When output_path is omitted, returns JSON { format: 'pdf', file_size_bytes, hint, base64_preview }. " +
+                        "Returns: JSON write-confirmation (if output_path set), or JSON binary-guidance object (if omitted). " +
+                        "Use this for high-fidelity, print-ready document output. " +
+                        "Prefer convert_to_html for web-viewable output, convert_to_docx for editable documents, or convert_to_latex for LaTeX toolchains.",
                     inputSchema: {
                         type: "object" as const,
                         properties: {
@@ -305,11 +328,15 @@ function setupServerHandlers(server: Server, config: ServerConfig) {
                     name: "convert_to_image",
                     description:
                         "Convert Markdown to a PNG image. Renders the Markdown as styled HTML (GFM tables, KaTeX math) and takes a " +
-                        "full-page screenshot via a headless Chromium browser. " +
+                        "full-page screenshot via a headless Chromium browser (Puppeteer). Requires a locally installed Chrome, Edge, or Chromium — " +
+                        "set PUPPETEER_EXECUTABLE_PATH env var to override auto-detection. " +
                         "This is a binary format — output_path should almost always be provided. " +
-                        "Side effects: launches a transient headless browser process. " +
-                        "When output_path is provided, writes the PNG to disk. When output_path is omitted, returns JSON { format, file_size_bytes, hint, base64_preview }. " +
-                        "Returns: JSON write-confirmation (if output_path set), or JSON binary-guidance object (if omitted).",
+                        "Side effects: launches a transient headless browser process (no persistent state; may fetch KaTeX CDN stylesheet). " +
+                        "When output_path is provided, writes the PNG to disk (creates parent directories, overwrites existing files). " +
+                        "When output_path is omitted, returns JSON { format: 'png', file_size_bytes, hint, base64_preview }. " +
+                        "Returns: JSON write-confirmation (if output_path set), or JSON binary-guidance object (if omitted). " +
+                        "Use this when you need a visual snapshot of the rendered Markdown (e.g. for embedding in chat, previews, social cards). " +
+                        "Prefer convert_to_pdf for paginated print output, or convert_to_html for interactive web content.",
                     inputSchema: {
                         type: "object" as const,
                         properties: {
@@ -325,9 +352,12 @@ function setupServerHandlers(server: Server, config: ServerConfig) {
                     description:
                         "Extract tables from Markdown and convert them to CSV format. Parses GFM pipe-tables from the input and outputs " +
                         "comma-separated values. If the Markdown contains multiple tables, they are concatenated with a blank line separator. " +
-                        "Non-table content is ignored. " +
-                        "Side effects: when output_path is provided, writes the CSV to disk. When output_path is omitted, returns the CSV text directly as a string. " +
-                        "Returns: CSV text string (if no output_path), or JSON { success, file_path, file_size_bytes, format } (if output_path set).",
+                        "Non-table content is ignored. If the Markdown contains no tables, returns an empty string. " +
+                        "Side effects: when output_path is provided, writes the CSV to disk (creates parent directories, overwrites existing files). " +
+                        "When output_path is omitted, returns the CSV text directly as a string. " +
+                        "Returns: CSV text string (if no output_path), or JSON { success, file_path, file_size_bytes, format } (if output_path set). " +
+                        "Use this for lightweight tabular export or when downstream tools expect CSV. " +
+                        "Prefer convert_to_xlsx for Excel-compatible spreadsheets with multiple sheets, or convert_to_json for structured data.",
                     inputSchema: {
                         type: "object" as const,
                         properties: {
@@ -343,8 +373,12 @@ function setupServerHandlers(server: Server, config: ServerConfig) {
                     description:
                         "Convert Markdown to a structured JSON representation. Parses the document into a JSON object with the document title " +
                         "as the root key, containing arrays of section objects with headings, paragraphs, lists, code blocks, and tables. " +
-                        "Side effects: when output_path is provided, writes the JSON to disk. When output_path is omitted, returns the JSON string directly. " +
-                        "Returns: JSON string (if no output_path), or JSON { success, file_path, file_size_bytes, format } (if output_path set).",
+                        "Useful for programmatic analysis or feeding structured content into other systems. " +
+                        "Side effects: when output_path is provided, writes the JSON to disk (creates parent directories, overwrites existing files). " +
+                        "When output_path is omitted, returns the JSON string directly. " +
+                        "Returns: JSON string (if no output_path), or JSON { success, file_path, file_size_bytes, format } (if output_path set). " +
+                        "Use this when you need a machine-readable AST-like representation of the Markdown content. " +
+                        "Prefer convert_to_xml for XML-based interchange, or convert_to_csv/convert_to_xlsx for tabular data extraction.",
                     inputSchema: {
                         type: "object" as const,
                         properties: {
@@ -362,13 +396,16 @@ function setupServerHandlers(server: Server, config: ServerConfig) {
                         "Convert Markdown to an XML document. Parses the Markdown into a structured XML tree with a root element named after " +
                         "the title parameter, containing <section>, <heading>, <paragraph>, <list>, <code>, and <table> elements. " +
                         "Produces well-formed XML with an <?xml?> declaration. " +
-                        "Side effects: when output_path is provided, writes the XML to disk. When output_path is omitted, returns the XML string directly. " +
-                        "Returns: XML string (if no output_path), or JSON { success, file_path, file_size_bytes, format } (if output_path set).",
+                        "Side effects: when output_path is provided, writes the XML to disk (creates parent directories, overwrites existing files). " +
+                        "When output_path is omitted, returns the XML string directly. " +
+                        "Returns: XML string (if no output_path), or JSON { success, file_path, file_size_bytes, format } (if output_path set). " +
+                        "Use this for XML-based data interchange or when downstream systems require XML input. " +
+                        "Prefer convert_to_json for JSON APIs, convert_to_html for XHTML/web content, or convert_to_csv for flat tabular data.",
                     inputSchema: {
                         type: "object" as const,
                         properties: {
                             markdown: { type: "string", description: PARAM_MARKDOWN },
-                            title: { type: "string", description: "Optional. The root XML element name and document title. Must be a valid XML element name. Defaults to 'document' if omitted." },
+                            title: { type: "string", description: "Optional. The root XML element name and document title. Must be a valid XML element name (no spaces or special characters). Defaults to 'document' if omitted." },
                             output_path: { type: "string", description: PARAM_OUTPUT_PATH_TEXT },
                         },
                         required: ["markdown"],
@@ -380,10 +417,13 @@ function setupServerHandlers(server: Server, config: ServerConfig) {
                     description:
                         "Convert Markdown tables to a Microsoft Excel XLSX spreadsheet. Parses GFM pipe-tables from the input " +
                         "and creates an Excel workbook. Each table becomes a sheet in the workbook. Non-table content is ignored. " +
+                        "If the Markdown contains no tables, produces an empty workbook. " +
                         "This is a binary format — output_path should almost always be provided. " +
-                        "Side effects: when output_path is provided, writes the XLSX binary to disk. " +
-                        "When output_path is omitted, returns JSON { format, file_size_bytes, hint, base64_preview }. " +
-                        "Returns: JSON write-confirmation (if output_path set), or JSON binary-guidance object (if omitted).",
+                        "Side effects: when output_path is provided, writes the XLSX binary to disk (creates parent directories, overwrites existing files). " +
+                        "When output_path is omitted, returns JSON { format: 'xlsx', file_size_bytes, hint, base64_preview }. " +
+                        "Returns: JSON write-confirmation (if output_path set), or JSON binary-guidance object (if omitted). " +
+                        "Use this when you need a full Excel file with formatting. " +
+                        "Prefer convert_to_csv for lightweight plain-text tabular export, or convert_to_json for structured programmatic access.",
                     inputSchema: {
                         type: "object" as const,
                         properties: {
@@ -398,9 +438,14 @@ function setupServerHandlers(server: Server, config: ServerConfig) {
                     name: "convert_to_html",
                     description:
                         "Convert Markdown to a complete, styled HTML document. Renders GFM (tables, task lists, strikethrough) and " +
-                        "KaTeX math into semantic HTML with an embedded stylesheet. The output is a full <!DOCTYPE html> document. " +
-                        "Side effects: when output_path is provided, writes the HTML file to disk. When output_path is omitted, returns the full HTML string directly. " +
-                        "Returns: HTML document string (if no output_path), or JSON { success, file_path, file_size_bytes, format } (if output_path set).",
+                        "KaTeX math into semantic HTML with an embedded stylesheet for clean presentation. " +
+                        "The output is a full <!DOCTYPE html> document with <head> (charset, KaTeX CSS CDN link, inline styles) and <body>. " +
+                        "Side effects: when output_path is provided, writes the HTML file to disk (creates parent directories, overwrites existing files). " +
+                        "When output_path is omitted, returns the full HTML string directly. " +
+                        "Returns: HTML document string (if no output_path), or JSON { success, file_path, file_size_bytes, format } (if output_path set). " +
+                        "Use this when you need a file saved to disk or when you need the full document. " +
+                        "Prefer generate_html if you only need the HTML string returned directly (no file I/O) and want inline styles without a CDN link. " +
+                        "Prefer convert_to_pdf for print-ready output, or convert_to_image for a visual snapshot.",
                     inputSchema: {
                         type: "object" as const,
                         properties: {
@@ -415,14 +460,19 @@ function setupServerHandlers(server: Server, config: ServerConfig) {
                     name: "convert_to_md",
                     description:
                         "Export Markdown content, optionally harmonizing its formatting first. When harmonize=false (default), " +
-                        "returns the input Markdown unchanged. When harmonize=true, applies normalization (ATX-style headers, '-' list markers, fenced code blocks). " +
-                        "Side effects: when output_path is provided, writes the Markdown to disk. When output_path is omitted, returns the Markdown string directly. " +
-                        "Returns: Markdown string (if no output_path), or JSON { success, file_path, file_size_bytes, format } (if output_path set).",
+                        "returns the input Markdown unchanged. When harmonize=true, applies the same normalization as harmonize_markdown " +
+                        "(ATX-style headers, '-' list markers, fenced code blocks, consistent indentation) before returning. " +
+                        "Side effects: when output_path is provided, writes the Markdown to disk (creates parent directories, overwrites existing files). " +
+                        "When output_path is omitted, returns the Markdown string directly. " +
+                        "Returns: Markdown string (if no output_path), or JSON { success, file_path, file_size_bytes, format } (if output_path set). " +
+                        "Use this when you want to save Markdown to a file (with or without cleanup). " +
+                        "Prefer harmonize_markdown if you only want to normalize formatting without saving to disk. " +
+                        "Use the convert_to_* family for other output formats.",
                     inputSchema: {
                         type: "object" as const,
                         properties: {
                             markdown: { type: "string", description: PARAM_MARKDOWN },
-                            harmonize: { type: "boolean", description: "Optional. When true, normalizes Markdown syntax before returning or saving. Defaults to false." },
+                            harmonize: { type: "boolean", description: "Optional. When true, normalizes Markdown syntax (ATX headers, '-' list markers, fenced code blocks, consistent indentation) before returning or saving. When false or omitted, the Markdown is passed through unchanged. Defaults to false." },
                             output_path: { type: "string", description: PARAM_OUTPUT_PATH_TEXT },
                         },
                         required: ["markdown"],
@@ -433,14 +483,19 @@ function setupServerHandlers(server: Server, config: ServerConfig) {
                     name: "generate_html",
                     description:
                         "Generate a complete, self-contained HTML document from Markdown with all styles inlined. " +
-                        "Renders GFM and KaTeX math into a full HTML page. Returns the HTML string directly — no file is written to disk. " +
+                        "Renders GFM (tables, task lists, strikethrough) and KaTeX math into a full HTML page with an embedded <style> block " +
+                        "and a KaTeX CSS CDN link. Returns the HTML string directly — no file is written to disk. " +
                         "Side effects: none. This tool is read-only and performs no file I/O. " +
-                        "Returns: a complete HTML document string (<!DOCTYPE html>…</html>) with inline styles.",
+                        "Returns: a complete HTML document string (<!DOCTYPE html>…</html>) with inline styles, ready for rendering in a browser. " +
+                        "The optional title parameter sets the <title> tag in the HTML <head> section. " +
+                        "Use this when you need styled HTML output returned as a string (e.g., for embedding in responses or previewing). " +
+                        "Prefer convert_to_html when you need to write the HTML to a file on disk. " +
+                        "Prefer convert_to_pdf or convert_to_image for non-HTML visual output formats.",
                     inputSchema: {
                         type: "object" as const,
                         properties: {
                             markdown: { type: "string", description: PARAM_MARKDOWN },
-                            title: { type: "string", description: "Optional. Sets the <title> tag in the HTML document's <head> section. Defaults to 'Document' if omitted." },
+                            title: { type: "string", description: "Optional. Sets the <title> tag in the HTML document's <head> section. Displayed in browser tabs and bookmarks. Defaults to 'Document' if omitted." },
                         },
                         required: ["markdown"],
                     },
@@ -455,118 +510,166 @@ function setupServerHandlers(server: Server, config: ServerConfig) {
                 // ── Platform-specific format tools ──
                 {
                     name: "convert_to_slack",
-                    description: "Convert Markdown to Slack mrkdwn format.",
+                    description:
+                        "Convert Markdown to Slack mrkdwn format. Transforms bold (**) to single asterisks, italic to underscores, " +
+                        "links to Slack <url|text> syntax, and headers to bold text. " +
+                        "Use this when pasting formatted content into Slack messages.",
                     inputSchema: { type: "object" as const, properties: { markdown: { type: "string", description: PARAM_MARKDOWN }, output_path: { type: "string", description: PARAM_OUTPUT_PATH_TEXT } }, required: ["markdown"] },
                     annotations: { ...TEXT_TOOL_ANNOTATIONS, title: "Convert to Slack mrkdwn" },
                 },
                 {
                     name: "convert_to_discord",
-                    description: "Convert Markdown to Discord-compatible format.",
+                    description:
+                        "Convert Markdown to Discord-compatible format. Transforms headers to styled bold/underline text that renders " +
+                        "correctly in Discord messages. Code blocks and basic formatting are preserved.",
                     inputSchema: { type: "object" as const, properties: { markdown: { type: "string", description: PARAM_MARKDOWN }, output_path: { type: "string", description: PARAM_OUTPUT_PATH_TEXT } }, required: ["markdown"] },
                     annotations: { ...TEXT_TOOL_ANNOTATIONS, title: "Convert to Discord Markdown" },
                 },
                 {
                     name: "convert_to_jira",
-                    description: "Convert Markdown to JIRA wiki markup.",
+                    description:
+                        "Convert Markdown to JIRA wiki markup. Transforms headers to h1./h2., bold to single asterisks, " +
+                        "code blocks to {code} blocks, links to [text|url], and lists to JIRA * and # syntax.",
                     inputSchema: { type: "object" as const, properties: { markdown: { type: "string", description: PARAM_MARKDOWN }, output_path: { type: "string", description: PARAM_OUTPUT_PATH_TEXT } }, required: ["markdown"] },
                     annotations: { ...TEXT_TOOL_ANNOTATIONS, title: "Convert to JIRA Markup" },
                 },
                 {
                     name: "convert_to_confluence",
-                    description: "Convert Markdown to Confluence wiki markup.",
+                    description:
+                        "Convert Markdown to Confluence wiki markup. Similar to JIRA but includes Confluence-specific {info}, {note} panels " +
+                        "and {code:language=x} syntax.",
                     inputSchema: { type: "object" as const, properties: { markdown: { type: "string", description: PARAM_MARKDOWN }, output_path: { type: "string", description: PARAM_OUTPUT_PATH_TEXT } }, required: ["markdown"] },
                     annotations: { ...TEXT_TOOL_ANNOTATIONS, title: "Convert to Confluence Markup" },
                 },
                 {
                     name: "convert_to_asciidoc",
-                    description: "Convert Markdown to AsciiDoc format.",
+                    description:
+                        "Convert Markdown to AsciiDoc format. Transforms headers to = syntax, code blocks to ---- delimited blocks, " +
+                        "links to url[text] syntax, and images to image::url[alt] directives.",
                     inputSchema: { type: "object" as const, properties: { markdown: { type: "string", description: PARAM_MARKDOWN }, output_path: { type: "string", description: PARAM_OUTPUT_PATH_TEXT } }, required: ["markdown"] },
                     annotations: { ...TEXT_TOOL_ANNOTATIONS, title: "Convert to AsciiDoc" },
                 },
                 {
                     name: "convert_to_rst",
-                    description: "Convert Markdown to reStructuredText (RST) format.",
+                    description:
+                        "Convert Markdown to reStructuredText (RST) format. Transforms headers to underlined text, " +
+                        "code blocks to .. code-block:: directives, and links to RST reference syntax.",
                     inputSchema: { type: "object" as const, properties: { markdown: { type: "string", description: PARAM_MARKDOWN }, output_path: { type: "string", description: PARAM_OUTPUT_PATH_TEXT } }, required: ["markdown"] },
                     annotations: { ...TEXT_TOOL_ANNOTATIONS, title: "Convert to reStructuredText" },
                 },
                 {
                     name: "convert_to_mediawiki",
-                    description: "Convert Markdown to MediaWiki markup.",
+                    description:
+                        "Convert Markdown to MediaWiki markup. Transforms headers to == syntax, bold to triple quotes, " +
+                        "code to <syntaxhighlight> tags, and tables to {| wikitable format.",
                     inputSchema: { type: "object" as const, properties: { markdown: { type: "string", description: PARAM_MARKDOWN }, output_path: { type: "string", description: PARAM_OUTPUT_PATH_TEXT } }, required: ["markdown"] },
                     annotations: { ...TEXT_TOOL_ANNOTATIONS, title: "Convert to MediaWiki" },
                 },
                 {
                     name: "convert_to_bbcode",
-                    description: "Convert Markdown to BBCode format for forum posts.",
+                    description:
+                        "Convert Markdown to BBCode format. Transforms formatting to [b], [i], [s], [code], [url], [img] tags. " +
+                        "Used for forum posts on phpBB, vBulletin, and similar platforms.",
                     inputSchema: { type: "object" as const, properties: { markdown: { type: "string", description: PARAM_MARKDOWN }, output_path: { type: "string", description: PARAM_OUTPUT_PATH_TEXT } }, required: ["markdown"] },
                     annotations: { ...TEXT_TOOL_ANNOTATIONS, title: "Convert to BBCode" },
                 },
                 {
                     name: "convert_to_textile",
-                    description: "Convert Markdown to Textile markup format.",
+                    description:
+                        "Convert Markdown to Textile markup format. Used by Redmine, older versions of Basecamp, and some CMS platforms.",
                     inputSchema: { type: "object" as const, properties: { markdown: { type: "string", description: PARAM_MARKDOWN }, output_path: { type: "string", description: PARAM_OUTPUT_PATH_TEXT } }, required: ["markdown"] },
                     annotations: { ...TEXT_TOOL_ANNOTATIONS, title: "Convert to Textile" },
                 },
                 {
                     name: "convert_to_orgmode",
-                    description: "Convert Markdown to Emacs Org Mode format.",
+                    description:
+                        "Convert Markdown to Emacs Org Mode format. Transforms headers to * syntax, bold to *text*, " +
+                        "code blocks to #+BEGIN_SRC/#+END_SRC, and links to [[url][text]] syntax.",
                     inputSchema: { type: "object" as const, properties: { markdown: { type: "string", description: PARAM_MARKDOWN }, output_path: { type: "string", description: PARAM_OUTPUT_PATH_TEXT } }, required: ["markdown"] },
                     annotations: { ...TEXT_TOOL_ANNOTATIONS, title: "Convert to Org Mode" },
                 },
                 {
                     name: "convert_to_email_html",
-                    description: "Convert Markdown to email-optimized HTML with all styles inlined for Outlook, Gmail, etc.",
+                    description:
+                        "Convert Markdown to email-optimized HTML with all styles inlined. Produces HTML compatible with " +
+                        "Outlook, Gmail, Apple Mail, and other email clients. No external CSS dependencies. " +
+                        "Wraps content in a responsive email table layout.",
                     inputSchema: { type: "object" as const, properties: { markdown: { type: "string", description: PARAM_MARKDOWN }, output_path: { type: "string", description: PARAM_OUTPUT_PATH_TEXT } }, required: ["markdown"] },
                     annotations: { ...TEXT_TOOL_ANNOTATIONS, title: "Convert to Email HTML" },
                 },
                 // ── Import tools ──
                 {
                     name: "html_to_markdown",
-                    description: "Convert HTML to Markdown. Handles headings, tables, lists, code blocks, links, images, and inline formatting.",
-                    inputSchema: { type: "object" as const, properties: { html: { type: "string", description: "The HTML content to convert to Markdown." }, output_path: { type: "string", description: PARAM_OUTPUT_PATH_TEXT } }, required: ["html"] },
+                    description:
+                        "Convert HTML to Markdown. Performs round-trip import of HTML content back to Markdown format. " +
+                        "Handles headings, tables, lists, code blocks, links, images, and inline formatting. " +
+                        "Useful for importing web content or converting HTML emails to Markdown.",
+                    inputSchema: { type: "object" as const, properties: { html: { type: "string", description: "The HTML content to convert to Markdown. Can be a full HTML document or a fragment." }, output_path: { type: "string", description: PARAM_OUTPUT_PATH_TEXT } }, required: ["html"] },
                     annotations: { ...TEXT_TOOL_ANNOTATIONS, title: "Import HTML to Markdown" },
                 },
                 // ── Repair / Lint tools ──
                 {
                     name: "repair_markdown",
-                    description: "Repair broken Markdown from LLM output or copy-paste. Fixes unclosed code fences, broken tables, stray emphasis markers, etc.",
+                    description:
+                        "Repair broken Markdown from LLM output or copy-paste. Fixes unclosed code fences, broken tables " +
+                        "(mismatched columns, missing separators), stray emphasis markers, missing heading spaces, " +
+                        "inconsistent list indentation, broken links, and excessive whitespace.",
                     inputSchema: { type: "object" as const, properties: { markdown: { type: "string", description: "The potentially broken Markdown text to repair." }, output_path: { type: "string", description: PARAM_OUTPUT_PATH_TEXT } }, required: ["markdown"] },
                     annotations: { ...TEXT_TOOL_ANNOTATIONS, title: "Repair Broken Markdown" },
                 },
                 {
                     name: "lint_markdown",
-                    description: "Lint Markdown and report issues as a JSON array with line, severity, rule, message, and fixable flag.",
+                    description:
+                        "Lint Markdown and report issues. Returns a JSON array of lint issues found in the document, " +
+                        "each with line number, column, severity (error/warning/info), rule name, message, and fixable flag. " +
+                        "Checks for: missing heading spaces, trailing whitespace, inconsistent list markers, hard tabs, " +
+                        "multiple blank lines, bare URLs, unclosed emphasis, and unclosed code fences.",
                     inputSchema: { type: "object" as const, properties: { markdown: { type: "string", description: "The Markdown text to lint." } }, required: ["markdown"] },
                     annotations: { title: "Lint Markdown", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
                 },
                 // ── Analysis tools ──
                 {
                     name: "extract_code_blocks",
-                    description: "Extract all code blocks from Markdown. Returns JSON array with language, code, start/end line numbers.",
+                    description:
+                        "Extract all code blocks from a Markdown document. Returns a JSON array of code blocks, " +
+                        "each with language, code content, and start/end line numbers. " +
+                        "Useful for extracting code snippets from LLM responses or documentation.",
                     inputSchema: { type: "object" as const, properties: { markdown: { type: "string", description: "The Markdown text to extract code blocks from." } }, required: ["markdown"] },
                     annotations: { title: "Extract Code Blocks", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
                 },
                 {
                     name: "extract_links",
-                    description: "Extract all links and images from Markdown. Returns JSON with text, URL, line, and type.",
+                    description:
+                        "Extract all links and images from a Markdown document. Returns a JSON array with link text, URL, " +
+                        "line number, and type (inline, reference, image, autolink). " +
+                        "Useful for link checking, SEO analysis, or extracting references.",
                     inputSchema: { type: "object" as const, properties: { markdown: { type: "string", description: "The Markdown text to extract links from." } }, required: ["markdown"] },
                     annotations: { title: "Extract Links", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
                 },
                 {
                     name: "generate_toc",
-                    description: "Generate a Table of Contents from Markdown headings with indented links.",
+                    description:
+                        "Generate a Table of Contents from Markdown headings. Returns a Markdown-formatted TOC with " +
+                        "indented links to each heading. Handles duplicate heading slugs. " +
+                        "The max_depth parameter controls the deepest heading level to include.",
                     inputSchema: { type: "object" as const, properties: { markdown: { type: "string", description: "The Markdown text to generate a TOC from." }, max_depth: { type: "number", description: "Maximum heading depth (1-6, default: 6)." } }, required: ["markdown"] },
                     annotations: { title: "Generate Table of Contents", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
                 },
                 {
                     name: "analyze_document",
-                    description: "Analyze Markdown and return comprehensive statistics: word/line/character counts, element counts, reading time.",
+                    description:
+                        "Analyze a Markdown document and return comprehensive statistics. Returns JSON with: " +
+                        "line/word/character/paragraph/sentence counts, heading/code block/table/link/image/list/blockquote counts, " +
+                        "and estimated reading time in minutes.",
                     inputSchema: { type: "object" as const, properties: { markdown: { type: "string", description: "The Markdown text to analyze." } }, required: ["markdown"] },
                     annotations: { title: "Analyze Document Statistics", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
                 },
                 {
                     name: "extract_structure",
-                    description: "Extract full document structure: stats, heading outline, code block summary, and link summary.",
+                    description:
+                        "Extract the full structure of a Markdown document. Returns JSON with document statistics, " +
+                        "heading outline, code block summary (language, line count, positions), and link summary " +
+                        "(totals by type, unique URL count). Provides a bird's-eye view of document architecture.",
                     inputSchema: { type: "object" as const, properties: { markdown: { type: "string", description: "The Markdown text to extract structure from." } }, required: ["markdown"] },
                     annotations: { title: "Extract Document Structure", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
                 },
@@ -600,10 +703,19 @@ function setupServerHandlers(server: Server, config: ServerConfig) {
             if (name === "convert_to_latex") return handleOutput(parseMarkdownToLaTeX(markdown), outputPath);
 
             if (name === "convert_to_docx") {
-                const elements = parseMarkdownToDocx(markdown);
-                const doc = new (await import("docx")).Document({ sections: [{ children: elements }] });
+                const { elements, footnotes } = parseMarkdownToDocx(markdown);
+                const docOptions: any = {
+                    sections: [{ children: elements }]
+                };
+                if (Object.keys(footnotes).length > 0) {
+                    docOptions.footnotes = footnotes;
+                }
+                const doc = new (await import("docx")).Document(docOptions);
                 const buffer = await Packer.toBuffer(doc);
-                return handleOutput(buffer, outputPath, { format: 'docx', description: 'Word document' });
+                return handleOutput(buffer, outputPath, {
+                    format: 'docx',
+                    description: 'Microsoft Word document generated from Markdown'
+                });
             }
 
             if (name === "convert_to_csv") return handleOutput(generateCSV(markdown), outputPath);

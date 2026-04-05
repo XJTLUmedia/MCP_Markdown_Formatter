@@ -1284,10 +1284,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
 
         if (name === "convert_to_docx") {
-            const elements = parseMarkdownToDocx(markdown);
-            const doc = new ((await import("docx")).Document)({
+            const { elements, footnotes } = parseMarkdownToDocx(markdown);
+            const docOptions: any = {
                 sections: [{ children: elements }]
-            });
+            };
+            if (Object.keys(footnotes).length > 0) {
+                docOptions.footnotes = footnotes;
+            }
+            const doc = new ((await import("docx")).Document)(docOptions);
             const buffer = await Packer.toBuffer(doc);
             return handleOutput(buffer, outputPath, {
                 format: 'docx',

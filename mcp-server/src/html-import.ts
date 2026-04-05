@@ -61,6 +61,15 @@ export function htmlToMarkdown(html: string): string {
     md = md.replace(/<(em|i)[^>]*>([\s\S]*?)<\/\1>/gi, '*$2*');
     // Strikethrough
     md = md.replace(/<(del|s|strike)[^>]*>([\s\S]*?)<\/\1>/gi, '~~$2~~');
+    // Highlight / mark
+    md = md.replace(/<mark[^>]*>([\s\S]*?)<\/mark>/gi, '==$1==');
+    // Keyboard
+    md = md.replace(/<kbd[^>]*>([\s\S]*?)<\/kbd>/gi, '`$1`');
+    // Superscript / subscript
+    md = md.replace(/<sup[^>]*>([\s\S]*?)<\/sup>/gi, '^$1^');
+    md = md.replace(/<sub[^>]*>([\s\S]*?)<\/sub>/gi, '~$1~');
+    // Abbreviations — just keep the text
+    md = md.replace(/<abbr[^>]*>([\s\S]*?)<\/abbr>/gi, '$1');
     // Code
     md = md.replace(/<code[^>]*>([\s\S]*?)<\/code>/gi, '`$1`');
     // Links
@@ -69,6 +78,42 @@ export function htmlToMarkdown(html: string): string {
     md = md.replace(/<img[^>]*src="([^"]*)"[^>]*alt="([^"]*)"[^>]*\/?>/gi, '![$2]($1)');
     md = md.replace(/<img[^>]*alt="([^"]*)"[^>]*src="([^"]*)"[^>]*\/?>/gi, '![$1]($2)');
     md = md.replace(/<img[^>]*src="([^"]*)"[^>]*\/?>/gi, '![]($1)');
+
+    // Definition lists
+    md = md.replace(/<dl[^>]*>([\s\S]*?)<\/dl>/gi, (_m, content) => {
+        let result = '\n';
+        const dtRegex = /<dt[^>]*>([\s\S]*?)<\/dt>/gi;
+        const ddRegex = /<dd[^>]*>([\s\S]*?)<\/dd>/gi;
+        let dtMatch;
+        const dts: string[] = [];
+        const dds: string[] = [];
+        while ((dtMatch = dtRegex.exec(content)) !== null) dts.push(dtMatch[1].replace(/<[^>]+>/g, '').trim());
+        let ddMatch;
+        while ((ddMatch = ddRegex.exec(content)) !== null) dds.push(ddMatch[1].replace(/<[^>]+>/g, '').trim());
+        for (let i = 0; i < Math.max(dts.length, dds.length); i++) {
+            if (i < dts.length) result += `${dts[i]}\n`;
+            if (i < dds.length) result += `: ${dds[i]}\n`;
+        }
+        return result + '\n';
+    });
+
+    // Details/summary → blockquote with bold summary
+    md = md.replace(/<details[^>]*>\s*<summary[^>]*>([\s\S]*?)<\/summary>([\s\S]*?)<\/details>/gi,
+        (_m, summary, content) => `\n> **${summary.replace(/<[^>]+>/g, '').trim()}**\n> ${content.replace(/<[^>]+>/g, '').trim()}\n`
+    );
+
+    // Figure/figcaption
+    md = md.replace(/<figure[^>]*>([\s\S]*?)<\/figure>/gi, (_m, content) => {
+        const imgMatch = content.match(/<img[^>]*src="([^"]*)"[^>]*\/?>/i);
+        const captionMatch = content.match(/<figcaption[^>]*>([\s\S]*?)<\/figcaption>/i);
+        const src = imgMatch ? imgMatch[1] : '';
+        const caption = captionMatch ? captionMatch[1].replace(/<[^>]+>/g, '').trim() : '';
+        return src ? `\n![${caption}](${src})\n` : '';
+    });
+
+    // Task list checkboxes inside list items (already converted to - items)
+    md = md.replace(/- <input[^>]*checked[^>]*\/?>\s*/gi, '- [x] ');
+    md = md.replace(/- <input[^>]*type="checkbox"[^>]*\/?>\s*/gi, '- [ ] ');
 
     // Remove remaining HTML tags
     md = md.replace(/<[^>]+>/g, '');

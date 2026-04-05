@@ -191,12 +191,16 @@ export async function exportAsImage(elementId: string, filename: string = 'previ
  * Export content as Word Document (.docx)
  */
 export async function exportAsWord(markdownContent: string, filename: string = 'document'): Promise<void> {
-    const elements = parseMarkdownToDocx(markdownContent);
-    const doc = new Document({
+    const { elements, footnotes } = parseMarkdownToDocx(markdownContent);
+    const docOptions: any = {
         styles: { paragraphStyles: [{ id: 'Normal', name: 'Normal', run: { font: 'Calibri', size: 24 }, paragraph: { spacing: { line: 276 } } }] },
         numbering: { config: [{ reference: 'default-numbering', levels: [{ level: 0, format: 'decimal', text: '%1.', alignment: AlignmentType.START, style: { paragraph: { indent: { left: 720, hanging: 360 } } } }] }] },
         sections: [{ properties: { page: { margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } } }, children: elements }]
-    });
+    };
+    if (Object.keys(footnotes).length > 0) {
+        docOptions.footnotes = footnotes;
+    }
+    const doc = new Document(docOptions);
     const blob = await Packer.toBlob(doc);
     saveAs(blob, filename.endsWith('.docx') ? filename : `${filename}.docx`);
 }
