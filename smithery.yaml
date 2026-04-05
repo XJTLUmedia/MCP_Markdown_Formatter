@@ -6,9 +6,7 @@ startCommand:
       pdf_page_format:
         type: string
         title: PDF Page Format
-        description: >-
-          Paper size for PDF output. Controls page dimensions when converting
-          Markdown to PDF via headless Chromium.
+        description: Paper size for PDF output. Controls page dimensions for Markdown-to-PDF conversion.
         default: A4
         enum:
           - A4
@@ -18,17 +16,12 @@ startCommand:
       pdf_margin:
         type: string
         title: PDF Margin
-        description: >-
-          Margin size for PDF output in CSS units. Applied to all four sides
-          of the page. Examples: '20mm', '1in', '0.5cm'.
+        description: "PDF margin in CSS units, applied to all sides. Examples: '20mm', '1in', '0.5cm'."
         default: "20mm"
       html_theme:
         type: string
         title: HTML Theme
-        description: >-
-          Visual theme for HTML, PDF, and PNG image output. 'light' uses a
-          white background with dark text; 'dark' uses a dark background with
-          light text. Affects all browser-rendered outputs.
+        description: "Visual theme for HTML/PDF/PNG output. 'light' = white background, 'dark' = dark background."
         default: light
         enum:
           - light
@@ -36,17 +29,12 @@ startCommand:
       default_title:
         type: string
         title: Default Document Title
-        description: >-
-          Fallback title used when no explicit title parameter is provided in
-          a tool call. Appears in PDF metadata, HTML <title>, and XML/JSON
-          root element names.
+        description: Fallback document title when none is provided. Used in PDF metadata, HTML title, XML root.
         default: document
       code_style:
         type: string
         title: Code Block Style
-        description: >-
-          Syntax highlighting theme for fenced code blocks in HTML, PDF, and
-          image output. Controls the color scheme of rendered source code.
+        description: Syntax highlighting theme for fenced code blocks in HTML, PDF, and image output.
         default: github
         enum:
           - github
@@ -56,9 +44,7 @@ startCommand:
       max_input_bytes:
         type: number
         title: Max Input Size (bytes)
-        description: >-
-          Maximum allowed input size in bytes. Documents exceeding this limit
-          are rejected to prevent timeouts. Default is 1 GB.
+        description: "Max input size in bytes. Documents exceeding this are rejected. Default: 1 GB (1073741824)."
         default: 1073741824
     required: []
   deploymentUrl: https://ai-answer-copier.vercel.app/api/mcp
