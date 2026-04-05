@@ -655,7 +655,7 @@ export function markdownToOrgMode(md: string): string {
     // Highlight: ==text== → *text* (Org has no native highlight, use bold)
     out = out.replace(/==([^=]+)==/g, '*$1*');
     // Footnote refs → Org Mode native [fn:label]
-    for (const [label, text] of Object.entries(footnoteMap)) {
+    for (const [label] of Object.entries(footnoteMap)) {
         const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         out = out.replace(new RegExp(`\\[\\^${escaped}\\]`, 'g'), `[fn:${label}]`);
     }
@@ -706,7 +706,6 @@ export function markdownToOrgMode(md: string): string {
 function convertMarkdownTableToOrg(text: string): string {
     const lines = text.split('\n');
     const result: string[] = [];
-    let isFirstRow = true;
     for (const line of lines) {
         const trimmed = line.trim();
         if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
@@ -714,12 +713,10 @@ function convertMarkdownTableToOrg(text: string): string {
                 // Convert separator to org separator
                 const cells = trimmed.split('|').filter(c => c.trim());
                 result.push('|' + cells.map(c => '-'.repeat(c.trim().length + 2)).join('+') + '|');
-                isFirstRow = false;
                 continue;
             }
             result.push(trimmed);
         } else {
-            isFirstRow = true;
             result.push(line);
         }
     }
