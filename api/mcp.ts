@@ -1243,10 +1243,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const body = (req.method === 'POST' || req.method === 'PUT') ? req.body : undefined;
 
-        // Force initialization for all methods if the instance is new, 
+        // Detect whether this POST carries an actual MCP "initialize" message.
+        // If so, let the SDK handle the handshake naturally — forcing _initialized
+        // before the transport processes "initialize" causes it to reject with 400.
+        const isInitializeMsg = body && typeof body === 'object' && !Array.isArray(body) && body.method === 'initialize';
+
+        // Force initialization for non-initialize requests on a new instance,
         // because in a serverless environment we can't rely on the client
         // hitting the same instance for the 'initialize' message.
-        if (instance.isNew) {
+        if (instance.isNew && !isInitializeMsg) {
             console.log(`[MCP] Cold Start/Instance Migration detected for session ${sessionId}. Forcing initialization.`);
             // Access internal SDK property to bypass the initialize handshake requirement
             // in stateless serverless environments. Guarded to survive future SDK changes.
@@ -1267,6 +1272,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 trn.sessionId = sessionId;
             }
         }
+        instance.isNew = false;
 
         // Build absolute URL for the Web Request
         const protocol = req.headers['x-forwarded-proto'] || 'http';
