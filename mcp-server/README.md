@@ -8,7 +8,7 @@
 [![Glama](https://glama.ai/mcp/servers/XJTLUmedia/AI_answer_copier/badge)](https://glama.ai/mcp/servers/XJTLUmedia/AI_answer_copier)
 [![GitHub](https://img.shields.io/github/stars/XJTLUmedia/AI_answer_copier?style=social)](https://github.com/XJTLUmedia/AI_answer_copier)
 
-**A Model Context Protocol (MCP) server that gives your AI assistant 33 powerful tools** — convert Markdown to 23+ document formats (PDF, DOCX, HTML, LaTeX, CSV, JSON, XML, XLSX, RTF, PNG, Email HTML…), 10 platform-native formats (Slack, Discord, JIRA, Confluence, AsciiDoc, RST, MediaWiki, BBCode, Textile, Org Mode), plus HTML import, markdown repair & lint, and document analysis. Stop copy-pasting. Let the AI do the exporting.
+**A Model Context Protocol (MCP) server that gives your AI assistant 34 powerful tools** — convert Markdown to 22 document formats (PDF, DOCX, HTML, LaTeX, CSV, JSON, XML, XLSX, RTF, PNG, Email HTML…), 10 platform-native formats (Slack, Discord, JIRA, Confluence, AsciiDoc, RST, MediaWiki, BBCode, Textile, Org Mode), **batch-convert multiple documents in one call**, plus HTML import, markdown repair & lint, and document analysis. Stop copy-pasting. Let the AI do the exporting.
 
 ---
 
@@ -27,7 +27,7 @@ You asked an AI to generate 20 exam questions. It delivered — beautifully. But
 
 ---
 
-## 33 MCP Tools at Your AI's Fingertips
+## 34 MCP Tools at Your AI's Fingertips
 
 ### Document Conversion (15 tools)
 
@@ -75,8 +75,7 @@ You asked an AI to generate 20 exam questions. It delivered — beautifully. But
 | `extract_links` | Extract all URLs and link text |
 | `generate_toc` | Generate a table of contents |
 | `analyze_document` | Word count, reading time, structure stats |
-| `extract_structure` | Extract document heading hierarchy |
-
+| `extract_structure` | Extract document heading hierarchy || `batch_convert` | Batch-convert multiple documents to 22 formats in one call — accepts items[] × formats[], error-isolated per item, optional output_dir |
 Every tool accepts a `markdown` string input and an optional `output_path` to save directly to disk. Binary formats (PDF, DOCX, XLSX, PNG) intelligently guide the AI to save files rather than dumping raw base64.
 
 ---
@@ -135,7 +134,7 @@ Edit `%APPDATA%\Claude\claude_desktop_config.json` (Windows) or `~/Library/Appli
 }
 ```
 
-Restart Claude Desktop. You'll see a 🔌 icon — all 33 tools are now available to Claude.
+Restart Claude Desktop. You'll see a 🔌 icon — all 34 tools are now available to Claude.
 
 ### VS Code (GitHub Copilot)
 
@@ -175,6 +174,10 @@ npx @modelcontextprotocol/inspector https://ai-answer-copier.vercel.app/api/mcp
 ## Usage Examples
 
 Once connected, just talk to your AI naturally:
+
+> **"Batch-convert 5 markdown documents into DOCX, PDF, and HTML simultaneously and save them to my Downloads folder."**
+
+The AI will use `batch_convert` with all five documents and three format IDs.
 
 > **"Generate 10 physics questions about Newton's Laws and export them as a Kahoot CSV."**
 
@@ -271,7 +274,7 @@ Zero runtime dependencies on external APIs. Everything runs locally on your mach
          ▼
 ┌──────────────────────────────────┐
 │  AI Answer Copier MCP Server     │
-│  33 tools                        │
+│  34 tools                        │
 │                                  │
 │  ┌─ Document Conversion (15) ───┐│
 │  │  remark/rehype · docx · xlsx ││
@@ -284,6 +287,10 @@ Zero runtime dependencies on external APIs. Everything runs locally on your mach
 │  │  Confluence · AsciiDoc · RST ││
 │  │  MediaWiki · BBCode          ││
 │  │  Textile · Org Mode          ││
+│  └──────────────────────────────┘│
+│  ┌─ Batch Convert (1) ──────────┐│
+│  │  items[] × formats[]         ││
+│  │  22 formats · error-isolated ││
 │  └──────────────────────────────┘│
 │  ┌─ Import & Repair (3) ────────┐│
 │  │  HTML→MD · Repair · Lint     ││

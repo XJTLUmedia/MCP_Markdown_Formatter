@@ -1,7 +1,7 @@
 {
     "serverInfo": {
         "name": "AI Answer Copier — Markdown Formatter",
-        "version": "2.1.2"
+        "version": "2.3.0"
     },
     "authentication": {
         "required": false
@@ -433,6 +433,35 @@
                 "required": ["markdown"]
             },
             "annotations": { "title": "Extract Document Structure", "readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false }
+        },
+        {
+            "name": "batch_convert",
+            "description": "Batch-convert multiple Markdown documents to one or more output formats in a single call. Accepts an array of items (each with markdown content and optional title) and an array of target format IDs. Supports 22 formats: txt, csv, json, xml, xlsx, latex, rtf, docx, pdf, html, md, email, slack, discord, jira, confluence, asciidoc, rst, mediawiki, bbcode, textile, orgmode. Errors are isolated per item+format so one failure does not stop the rest. When output_dir is provided, files are written to disk; otherwise binary formats are returned as base64 and text formats inline. Returns a summary (total_conversions, successful, failed) plus per-item results.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "description": "Array of documents to convert. Each item must have a 'markdown' string and an optional 'title' string.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "markdown": { "type": "string", "description": "The Markdown source text to convert." },
+                                "title": { "type": "string", "description": "Optional. Document title used in PDF metadata, HTML title, XML root element." }
+                            },
+                            "required": ["markdown"]
+                        }
+                    },
+                    "formats": {
+                        "type": "array",
+                        "description": "Array of output format IDs to convert each item into. Valid values: txt, csv, json, xml, xlsx, latex, rtf, docx, pdf, html, md, email, slack, discord, jira, confluence, asciidoc, rst, mediawiki, bbcode, textile, orgmode.",
+                        "items": { "type": "string" }
+                    },
+                    "output_dir": { "type": "string", "description": "Optional. Directory path where converted files will be saved. Created automatically if it does not exist. When omitted, results are returned inline." }
+                },
+                "required": ["items", "formats"]
+            },
+            "annotations": { "title": "Batch Convert Documents", "readOnlyHint": false, "destructiveHint": false, "idempotentHint": false, "openWorldHint": false }
         }
     ],
     "prompts": [
@@ -486,7 +515,7 @@
         {
             "uri": "markdown-formatter://supported-formats",
             "name": "Supported Output Formats",
-            "description": "Complete JSON list of all 23+ output formats with tool names and types",
+            "description": "Complete JSON list of all 22 output formats with tool names and types — txt, csv, json, xml, xlsx, latex, rtf, docx, pdf, html, md, email, slack, discord, jira, confluence, asciidoc, rst, mediawiki, bbcode, textile, orgmode",
             "mimeType": "application/json"
         },
         {

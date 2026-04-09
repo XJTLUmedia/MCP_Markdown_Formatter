@@ -8,7 +8,7 @@
 [![Glama](https://glama.ai/mcp/servers/XJTLUmedia/MCP_Markdown_Formatter/badge)](https://glama.ai/mcp/servers/XJTLUmedia/MCP_Markdown_Formatter)
 [![GitHub](https://img.shields.io/github/stars/XJTLUmedia/AI_answer_copier?style=social)](https://github.com/XJTLUmedia/AI_answer_copier)
 
-**A Model Context Protocol (MCP) server that gives your AI assistant the power to convert Markdown into 23+ professional document formats**, analyze documents, repair broken Markdown, and convert across platforms — all without leaving your AI chat.
+**A Model Context Protocol (MCP) server that gives your AI assistant the power to convert Markdown into 22 professional document formats**, batch-convert multiple documents across 22 formats in one call, analyze documents, repair broken Markdown, and convert across platforms — all without leaving your AI chat.
 
 <img width="1018" height="480" alt="image" src="https://github.com/user-attachments/assets/da33b251-f9fe-4bd5-941f-cb92f42350b9" />
 
@@ -49,7 +49,7 @@ Use actual MCP instance:
 
 ---
 
-## All 33 MCP Tools
+## All 34 MCP Tools
 
 ### Document Conversion Tools (15)
 
@@ -108,6 +108,12 @@ Use actual MCP instance:
 | 31 | `generate_toc` | Generate Markdown Table of Contents from headings with configurable `max_depth` (1–6) |
 | 32 | `analyze_document` | Comprehensive statistics — line/word/character/paragraph/sentence counts, heading/code/table/link/image counts, estimated reading time |
 | 33 | `extract_structure` | Bird's-eye document architecture — statistics, heading outline, code block summary, link summary |
+
+### Batch Conversion (1)
+
+| # | Tool | Input | Description |
+|---|---|---|---|
+| 34 | `batch_convert` | `items[]` × `formats[]` | Batch-convert multiple Markdown documents to 22 formats in one call. Error-isolated per item+format. Optional `output_dir` for file output. Formats: txt, csv, json, xml, xlsx, latex, rtf, docx, pdf, html, md, email, slack, discord, jira, confluence, asciidoc, rst, mediawiki, bbcode, textile, orgmode |
 
 ---
 
@@ -191,7 +197,7 @@ Edit `%APPDATA%\Claude\claude_desktop_config.json` (Windows) or `~/Library/Appli
 }
 ```
 
-Restart Claude Desktop. You'll see a 🔌 icon — all 33 tools are now available.
+Restart Claude Desktop. You'll see a 🔌 icon — all 34 tools are now available.
 
 ### VS Code (GitHub Copilot)
 
@@ -249,6 +255,9 @@ npx @modelcontextprotocol/inspector https://ai-answer-copier.vercel.app/api/mcp
 
 Once connected, just talk to your AI naturally:
 
+> **"Batch-convert 5 markdown documents into DOCX, PDF, and HTML simultaneously and save them to my Downloads folder."**
+> → AI uses `batch_convert` with items[] and formats[]
+
 > **"Generate 10 physics questions about Newton's Laws and export them as a Kahoot CSV."**
 > → AI uses `convert_to_csv`
 
@@ -274,9 +283,13 @@ Once connected, just talk to your AI naturally:
 
 ## Features
 
-### 23+ Output Formats
+### 22 Output Formats
 
 Export to PDF, DOCX, HTML, LaTeX, CSV, JSON, XML, XLSX, RTF, PNG, TXT, Markdown — plus Slack, Discord, JIRA, Confluence, AsciiDoc, RST, MediaWiki, BBCode, Textile, Org Mode, and Email HTML.
+
+### Batch Conversion
+
+Convert multiple Markdown documents to multiple formats in one `batch_convert` call. Errors are isolated per item+format so one failure never blocks the rest.
 
 ### Math & Code as First-Class Citizens
 
@@ -316,7 +329,7 @@ Zero runtime dependencies on external APIs. Everything runs locally. Your data n
            ▼
 ┌─────────────────────────┐
 │  AI Answer Copier        │
-│  MCP Server (33 tools)   │
+│  MCP Server (34 tools)   │
 │                          │
 │  ┌── Conversion ────────┐│
 │  │ remark/rehype, docx, ││
@@ -329,6 +342,10 @@ Zero runtime dependencies on external APIs. Everything runs locally. Your data n
 │  │ Confluence, AsciiDoc,││
 │  │ RST, MediaWiki,      ││
 │  │ BBCode, Textile, Org ││
+│  └──────────────────────┘│
+│  ┌── Batch ─────────────┐│
+│  │ items[] × formats[]  ││
+│  │ 22 formats, isolated ││
 │  └──────────────────────┘│
 │  ┌── Analysis ──────────┐│
 │  │ Code blocks, links,  ││
