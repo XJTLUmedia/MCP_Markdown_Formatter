@@ -22,8 +22,10 @@ import {
   Hash,
   Globe,
   BookOpen,
-  Mail
+  Mail,
+  Layers
 } from 'lucide-react';
+import { BatchConverter } from './components/BatchConverter';
 import { TEMPLATES } from './data/templates';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -64,6 +66,7 @@ function App() {
   const [input, setInput] = useState('');
   const [output, setOutput] = useState('');
   const [mode, setMode] = useState<'rich' | 'plain'>('rich');
+  const [appMode, setAppMode] = useState<'single' | 'batch'>('single');
   const [copied, setCopied] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(true);
@@ -297,6 +300,30 @@ function App() {
 
       <div className="flex flex-col gap-10">
 
+        {/* Mode Toggle: Single / Batch */}
+        <div className="flex justify-center">
+          <div className="segmented-control">
+            <button
+              onClick={() => setAppMode('single')}
+              className={`segment-item ${appMode === 'single' ? 'segment-item-active' : 'segment-item-inactive'}`}
+            >
+              <FileText className="w-4 h-4" />
+              Single
+            </button>
+            <button
+              onClick={() => setAppMode('batch')}
+              className={`segment-item ${appMode === 'batch' ? 'segment-item-active' : 'segment-item-inactive'}`}
+            >
+              <Layers className="w-4 h-4" />
+              Batch
+            </button>
+          </div>
+        </div>
+
+        {appMode === 'batch' ? (
+          <BatchConverter isDarkMode={isDarkMode} />
+        ) : (
+        <>
         {/* Main Workspace Card */}
         <div className="card-premium">
 
@@ -568,6 +595,8 @@ Example:
             <li><strong>Web Clipper:</strong> <button onClick={handleCopyBookmarklet} className="text-indigo-400 hover:text-indigo-300 underline font-medium cursor-pointer">Copy Bookmarklet</button> to extract markdown from any website directly.</li>
           </ul>
         </div>
+        </>
+        )}
 
       </div>
 

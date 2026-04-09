@@ -851,6 +851,52 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                     openWorldHint: false,
                 },
             },
+            // ── Batch conversion tool ──
+            {
+                name: "batch_convert",
+                description:
+                    "Batch convert multiple markdown documents to multiple output formats in a single call. " +
+                    "Supports all conversion formats: txt, csv, json, xml, xlsx, latex, rtf, docx, pdf, html, md, email_html, " +
+                    "slack, discord, jira, confluence, asciidoc, rst, mediawiki, bbcode, textile, orgmode. " +
+                    "Each item in the batch is processed independently — one failure does not stop the rest. " +
+                    "Results include per-item success/error status. " +
+                    "When output_dir is provided, files are saved to disk in subdirectories per input document. " +
+                    "Without output_dir, text format results are returned inline; binary formats return base64.",
+                inputSchema: {
+                    type: "object" as const,
+                    properties: {
+                        items: {
+                            type: "array",
+                            description: "Array of markdown documents to convert. Each item has 'markdown' (required) and 'title' (optional, used for filename and metadata).",
+                            items: {
+                                type: "object",
+                                properties: {
+                                    markdown: { type: "string", description: "The markdown content to convert" },
+                                    title: { type: "string", description: "Document title (used for filename and metadata). Defaults to 'document'" },
+                                },
+                                required: ["markdown"],
+                            },
+                        },
+                        formats: {
+                            type: "array",
+                            description: "Array of target format IDs. Valid values: txt, csv, json, xml, xlsx, latex, rtf, docx, pdf, html, md, email_html, slack, discord, jira, confluence, asciidoc, rst, mediawiki, bbcode, textile, orgmode",
+                            items: { type: "string" },
+                        },
+                        output_dir: {
+                            type: "string",
+                            description: "Optional base directory to save converted files. Files saved as: {output_dir}/{title}/{title}.{ext}. If omitted, results are returned inline.",
+                        },
+                    },
+                    required: ["items", "formats"],
+                },
+                annotations: {
+                    title: "Batch Convert Markdown",
+                    readOnlyHint: false,
+                    destructiveHint: false,
+                    idempotentHint: true,
+                    openWorldHint: false,
+                },
+            },
         ],
     };
 });
@@ -1529,6 +1575,227 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             const structure = extractStructure(markdown);
             return {
                 content: [{ type: "text", text: JSON.stringify(structure, null, 2) }],
+            };
+        }
+
+        // ── Batch conversion handler ──
+        if (name === "batch_convert") {
+            const items: Array<{ markdown: string; title?: string }> = (args as any).items;
+            const formats: string[] = (args as any).formats;
+            const outputDir: string | undefined = (args as any).output_dir;
+
+            if (!items || !Array.isArray(items) || items.length === 0) {
+                throw new Error("'items' must be a non-empty array of objects with 'markdown' field");
+            }
+            if (!formats || !Array.isArray(formats) || formats.length === 0) {
+                throw new Error("'formats' must be a non-empty array of format strings");
+            }
+
+            const results: Array<{
+                title: string;
+                format: string;
+                success: boolean;
+                file_path?: string;
+                file_size_bytes?: number;
+                content?: string;
+                error?: string;
+            }> = [];
+            let successful = 0;
+            let failed = 0;
+
+            // Format extension mapping
+            const FORMAT_EXT: Record<string, string> = {
+                txt: 'txt', csv: 'csv', json: 'json', xml: 'xml', xlsx: 'xlsx',
+                latex: 'tex', rtf: 'rtf', docx: 'docx', pdf: 'pdf', html: 'html',
+                md: 'md', email_html: 'html',
+                slack: 'txt', discord: 'txt', jira: 'txt', confluence: 'txt',
+                asciidoc: 'adoc', rst: 'rst', mediawiki: 'txt', bbcode: 'txt',
+                textile: 'txt', orgmode: 'org',
+            };
+
+            // Pre-launch browser if any PDF conversions are needed
+            let browser: any = null;
+            const needsBrowser = formats.includes('pdf');
+            if (needsBrowser) {
+                try {
+                    browser = await puppeteer.launch({ headless: true, executablePath: await findChrome() });
+                } catch (err: any) {
+                    // If browser fails to launch, PDF conversions will all fail individually
+                }
+            }
+
+            try {
+                for (const item of items) {
+                    const md = item.markdown;
+                    const title = item.title || 'document';
+
+                    if (!md) {
+                        for (const fmt of formats) {
+                            results.push({ title, format: fmt, success: false, error: 'Missing markdown content' });
+                            failed++;
+                        }
+                        continue;
+                    }
+
+                    for (const fmt of formats) {
+                        try {
+                            let content: string | Buffer;
+                            let isBinary = false;
+                            const ext = FORMAT_EXT[fmt] || fmt;
+
+                            switch (fmt) {
+                                case 'txt':
+                                    content = cleanMarkdownText(md);
+                                    break;
+                                case 'csv':
+                                    content = generateCSV(md);
+                                    break;
+                                case 'json':
+                                    content = generateJSON(md, title);
+                                    break;
+                                case 'xml':
+                                    content = generateXML(md, title);
+                                    break;
+                                case 'latex':
+                                    content = parseMarkdownToLaTeX(md);
+                                    break;
+                                case 'rtf':
+                                    content = parseMarkdownToRTF(md);
+                                    break;
+                                case 'html': {
+                                    const htmlProcessor = unified()
+                                        .use(remarkParse).use(remarkGfm)
+                                        // @ts-ignore
+                                        .use(remarkRehype)
+                                        // @ts-ignore
+                                        .use(rehypeKatex)
+                                        // @ts-ignore
+                                        .use(rehypeStringify);
+                                    const htmlFile = await htmlProcessor.process(md);
+                                    content = `<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI+WdtXRGWt2kTvGFasHpSy3SV" crossorigin="anonymous">
+<style>body { font-family: system-ui, -apple-system, sans-serif; padding: 40px; line-height: 1.6; max-width: 800px; margin: 0 auto; background: white; color: black; } img { max-width: 100%; } pre { background: #f4f4f4; padding: 15px; border-radius: 5px; overflow-x: auto; } table { border-collapse: collapse; width: 100%; margin: 1em 0; } th, td { border: 1px solid #ddd; padding: 8px; text-align: left; } th { background-color: #f2f2f2; }</style>
+</head><body>${String(htmlFile)}</body></html>`;
+                                    break;
+                                }
+                                case 'md': {
+                                    content = md;
+                                    break;
+                                }
+                                case 'email_html': {
+                                    content = await markdownToEmailHtml(md);
+                                    break;
+                                }
+                                case 'docx': {
+                                    const { elements, footnotes } = parseMarkdownToDocx(md);
+                                    const docOptions: any = { sections: [{ children: elements }] };
+                                    if (Object.keys(footnotes).length > 0) {
+                                        docOptions.footnotes = footnotes;
+                                    }
+                                    const doc = new ((await import("docx")).Document)(docOptions);
+                                    content = await Packer.toBuffer(doc);
+                                    isBinary = true;
+                                    break;
+                                }
+                                case 'xlsx': {
+                                    content = generateXLSXIndex(md);
+                                    isBinary = true;
+                                    break;
+                                }
+                                case 'pdf': {
+                                    if (!browser) {
+                                        throw new Error('Browser launch failed — cannot generate PDF. Ensure Chrome/Chromium is installed.');
+                                    }
+                                    const htmlProcessor = unified()
+                                        .use(remarkParse).use(remarkGfm)
+                                        // @ts-ignore
+                                        .use(remarkRehype)
+                                        // @ts-ignore
+                                        .use(rehypeKatex)
+                                        // @ts-ignore
+                                        .use(rehypeStringify);
+                                    const htmlFile = await htmlProcessor.process(md);
+                                    const htmlDoc = `<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI+WdtXRGWt2kTvGFasHpSy3SV" crossorigin="anonymous">
+<style>body { font-family: system-ui, -apple-system, sans-serif; padding: 40px; line-height: 1.6; max-width: 800px; margin: 0 auto; background: white; color: black; } img { max-width: 100%; } pre { background: #f4f4f4; padding: 15px; border-radius: 5px; overflow-x: auto; } table { border-collapse: collapse; width: 100%; margin: 1em 0; } th, td { border: 1px solid #ddd; padding: 8px; text-align: left; } th { background-color: #f2f2f2; }</style>
+</head><body>${String(htmlFile)}</body></html>`;
+                                    const page = await browser.newPage();
+                                    try {
+                                        await page.setContent(htmlDoc);
+                                        content = await page.pdf({ format: 'A4' }) as Buffer;
+                                        isBinary = true;
+                                    } finally {
+                                        await page.close();
+                                    }
+                                    break;
+                                }
+                                // Platform converters
+                                case 'slack': content = markdownToSlack(md); break;
+                                case 'discord': content = markdownToDiscord(md); break;
+                                case 'jira': content = markdownToJira(md); break;
+                                case 'confluence': content = markdownToConfluence(md); break;
+                                case 'asciidoc': content = markdownToAsciiDoc(md); break;
+                                case 'rst': content = markdownToRST(md); break;
+                                case 'mediawiki': content = markdownToMediaWiki(md); break;
+                                case 'bbcode': content = markdownToBBCode(md); break;
+                                case 'textile': content = markdownToTextile(md); break;
+                                case 'orgmode': content = markdownToOrgMode(md); break;
+                                default:
+                                    throw new Error(`Unsupported format: ${fmt}`);
+                            }
+
+                            // Handle output
+                            if (outputDir) {
+                                const dirPath = path.join(outputDir, title);
+                                const filePath = path.join(dirPath, `${title}.${ext}`);
+                                await fs.mkdir(dirPath, { recursive: true });
+                                await fs.writeFile(filePath, content);
+                                const stats = await fs.stat(filePath);
+                                results.push({
+                                    title, format: fmt, success: true,
+                                    file_path: filePath, file_size_bytes: stats.size,
+                                });
+                            } else if (isBinary) {
+                                const buf = Buffer.isBuffer(content) ? content : Buffer.from(content);
+                                results.push({
+                                    title, format: fmt, success: true,
+                                    file_size_bytes: buf.length,
+                                    content: buf.toString('base64').substring(0, 1000) + (buf.toString('base64').length > 1000 ? '...' : ''),
+                                });
+                            } else {
+                                results.push({
+                                    title, format: fmt, success: true,
+                                    content: content as string,
+                                });
+                            }
+                            successful++;
+                        } catch (convErr: any) {
+                            results.push({ title, format: fmt, success: false, error: convErr.message });
+                            failed++;
+                        }
+                    }
+                }
+            } finally {
+                if (browser) {
+                    await browser.close();
+                }
+            }
+
+            const summary = {
+                total_conversions: successful + failed,
+                successful,
+                failed,
+                items_processed: items.length,
+                formats_requested: formats.length,
+            };
+
+            return {
+                content: [{
+                    type: "text",
+                    text: JSON.stringify({ summary, results }, null, 2),
+                }],
             };
         }
 
