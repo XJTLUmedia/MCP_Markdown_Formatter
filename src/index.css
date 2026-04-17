@@ -1,8 +1,10 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    🌌  DESIGN SYSTEM
    A premium, futuristic design language for the AI answer copier
-   Pure CSS Implementation - No Framework Dependencies
+   Tailwind v4 utilities + custom design tokens
    ═══════════════════════════════════════════════════════════════════════════ */
+
+@import "tailwindcss";
 
 /* ─── CSS Custom Properties ─── */
 :root {

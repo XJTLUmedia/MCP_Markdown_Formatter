@@ -274,6 +274,7 @@ export function BatchConverter(_props: BatchConverterProps) {
                 multiple
                 accept=".md,.markdown,.txt,.text"
                 className="hidden"
+                onClick={(e) => e.stopPropagation()}
                 onChange={handleFileInput}
               />
             </div>
