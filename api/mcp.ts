@@ -88,7 +88,6 @@ interface ServerConfig {
     pdf_margin: string;
     html_theme: string;
     default_title: string;
-    code_style: string;
     max_input_bytes: number;
 }
 
@@ -98,8 +97,9 @@ function getDefaultConfig(): ServerConfig {
         pdf_margin: '20mm',
         html_theme: 'light',
         default_title: 'document',
-        code_style: 'github',
-        max_input_bytes: 1024 * 1024 * 1024,
+        // 10 MB default: enough for book-length docs, small enough to prevent
+        // accidental DoS via multi-GB payloads.
+        max_input_bytes: 10 * 1024 * 1024,
     };
 }
 
@@ -912,12 +912,14 @@ function setupServerHandlers(server: Server, config: ServerConfig) {
 
                 // Pre-launch browser if any PDF conversions are needed
                 let browser: any = null;
+                let browserLaunchError: string | null = null;
                 const needsBrowser = formats.includes('pdf');
                 if (needsBrowser) {
                     try {
                         browser = await getBrowser();
                     } catch (err: any) {
-                        // If browser fails to launch, PDF conversions will all fail individually
+                        // Capture the root cause so per-item PDF failures surface a helpful message
+                        browserLaunchError = err?.message || String(err);
                     }
                 }
 
@@ -996,7 +998,11 @@ function setupServerHandlers(server: Server, config: ServerConfig) {
                                     }
                                     case 'pdf': {
                                         if (!browser) {
-                                            throw new Error('Browser launch failed — cannot generate PDF. Ensure Chrome/Chromium is available.');
+                                            throw new Error(
+                                                browserLaunchError
+                                                    ? `Browser launch failed — cannot generate PDF. Cause: ${browserLaunchError}`
+                                                    : 'Browser launch failed — cannot generate PDF. Ensure Chrome/Chromium is available.'
+                                            );
                                         }
                                         const htmlFile = await unified().use(remarkParse).use(remarkGfm).use(remarkRehype).use(rehypeKatex).use(rehypeStringify).process(md);
                                         const isDark = config.html_theme === 'dark';
@@ -1544,8 +1550,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         pdf_margin: (req.query.pdf_margin as string) || '20mm',
         html_theme: (req.query.html_theme as string) || 'light',
         default_title: (req.query.default_title as string) || 'document',
-        code_style: (req.query.code_style as string) || 'github',
-        max_input_bytes: Number(req.query.max_input_bytes) || 1024 * 1024 * 1024,
+        max_input_bytes: Number(req.query.max_input_bytes) || 10 * 1024 * 1024,
     };
 
     // Evict stale sessions on every request (cheap O(n) scan, n stays small in practice)

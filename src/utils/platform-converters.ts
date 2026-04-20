@@ -78,8 +78,8 @@ export function markdownToDiscord(md: string): string {
     out = out.replace(/^\s*[-*+]\s+\[ \]\s+(.+)$/gm, '- ☐ $1');
     // Block quotes: > works in Discord
     // Code blocks: ``` works in Discord
-    // Horizontal rules are not rendered in Discord
-    out = out.replace(/^(-{3,}|\*{3,}|_{3,})$/gm, '');
+    // Horizontal rules: Discord doesn't render `---` natively; substitute a visible unicode rule
+    out = out.replace(/^(-{3,}|\*{3,}|_{3,})$/gm, '───────────────');
     return appendEndnotes(out, footnoteMap);
 }
 
@@ -329,8 +329,8 @@ export function markdownToRST(md: string): string {
     });
     // Bold: **text** → **text** (same in RST)
     // Italic: *text* → *text* (same in RST)
-    // Inline code: `code` → ``code``
-    out = out.replace(/(?<!`)(`[^`]+`)(?!`)/g, '`$1`');
+    // Inline code: `code` → ``code`` (double-backtick literal in RST)
+    out = out.replace(/(?<!`)`([^`\n]+)`(?!`)/g, '``$1``');
     // Links: [text](url) → `text <url>`_
     out = out.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '`$1 <$2>`_');
     // Images: ![alt](url) → .. image:: url\n   :alt: alt
@@ -511,8 +511,11 @@ export function markdownToBBCode(md: string): string {
     let out = cleaned;
     // Highlight: ==text== → [color=yellow]text[/color]
     out = out.replace(/==([^=]+)==/g, '[color=yellow]$1[/color]');
-    // Headers
-    out = out.replace(/^#{1,6}\s+(.+)$/gm, '[b][size=5]$1[/size][/b]');
+    // Headers: preserve level via size (h1=7 … h6=2)
+    out = out.replace(/^(#{1,6})\s+(.+)$/gm, (_m, hashes: string, text: string) => {
+        const size = Math.max(2, 8 - hashes.length);
+        return `[b][size=${size}]${text}[/size][/b]`;
+    });
     // Bold
     out = out.replace(/\*\*([^*]+)\*\*/g, '[b]$1[/b]');
     // Italic
@@ -595,10 +598,11 @@ export function markdownToTextile(md: string): string {
     out = out.replace(/~~([^~]+)~~/g, '-$1-');
     // Inline code
     out = out.replace(/`([^`]+)`/g, '@$1@');
-    // Code blocks
-    out = out.replace(/```(\w+)?\n([\s\S]*?)```/g, (_m, _lang, code) =>
-        `bc. ${code.trimEnd()}`
-    );
+    // Code blocks: wrap in <pre><code> for multi-line fidelity (Textile `bc.` is single-line only)
+    out = out.replace(/```(\w+)?\n([\s\S]*?)```/g, (_m, lang: string | undefined, code: string) => {
+        const langAttr = lang ? ` class="${lang}"` : '';
+        return `<pre><code${langAttr}>\n${code.trimEnd()}\n</code></pre>`;
+    });
     // Links: [text](url) → "text":url
     out = out.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '"$1":$2');
     // Images: ![alt](url) → !url(alt)!

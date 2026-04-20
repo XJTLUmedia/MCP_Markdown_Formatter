@@ -94,9 +94,15 @@ export function repairBrokenTables(md: string): string {
 }
 
 function repairTableBlock(lines: string[]): string[] {
+    const separatorRegex = /^\|[\s\-:]+\|[\s\-:|]*$/;
+    // Determine whether the original block contained a valid separator row.
+    // If the separator appeared at index 1, the first row is a real header.
+    const originalSepIndex = lines.findIndex(l => separatorRegex.test(l.trim()));
+    const hadHeader = originalSepIndex === 1;
+
     // Parse cells and find max column count
     const parsed = lines
-        .filter(l => !/^\|[\s-:]+\|[\s-:|]*$/.test(l.trim())) // remove existing separators
+        .filter(l => !separatorRegex.test(l.trim()))
         .map(l => l.split('|').slice(1, -1).map(c => c.trim()));
 
     if (parsed.length === 0) return lines;
@@ -109,38 +115,54 @@ function repairTableBlock(lines: string[]): string[] {
         return row;
     });
 
-    // Reconstruct table
+    // Reconstruct table: only synthesize a header separator if the original had one,
+    // or if there's only a single-row "table" that's already in header position.
+    // Otherwise, leave it as a pipe grid without promoting the first row to header.
     const result: string[] = [];
-    result.push('| ' + padded[0].join(' | ') + ' |');
-    result.push('| ' + padded[0].map(() => '---').join(' | ') + ' |');
-    for (let i = 1; i < padded.length; i++) {
-        result.push('| ' + padded[i].join(' | ') + ' |');
+    if (hadHeader || padded.length === 1) {
+        result.push('| ' + padded[0].join(' | ') + ' |');
+        result.push('| ' + padded[0].map(() => '---').join(' | ') + ' |');
+        for (let i = 1; i < padded.length; i++) {
+            result.push('| ' + padded[i].join(' | ') + ' |');
+        }
+    } else {
+        // Pipe grid without header: preserve all rows verbatim (just padded/normalized)
+        for (const row of padded) {
+            result.push('| ' + row.join(' | ') + ' |');
+        }
     }
     return result;
 }
 
 // Fix stray emphasis markers (* or _ at start/end without matching)
 export function repairStrayMarkers(md: string): string {
-    let out = md;
-    // Fix unmatched bold markers at line level
-    out = out.replace(/^(\*\*[^*]+)$/gm, (m) => {
-        if (!m.endsWith('**')) return m + '**';
-        return m;
-    });
-    out = out.replace(/^([^*]+\*\*)$/gm, (m) => {
-        if (!m.startsWith('**')) return '**' + m;
-        return m;
-    });
-    // Fix solo backticks (odd count of backticks on a line)
-    out = out.replace(/^((?:[^`]*`[^`]*){1,})$/gm, (line) => {
-        const count = (line.match(/`/g) || []).length;
-        if (count % 2 !== 0) {
-            // Find the last backtick and close it
-            return line + '`';
+    // Walk line-by-line but skip fenced code blocks entirely so we don't mutate code content.
+    const lines = md.split('\n');
+    let inFence = false;
+    for (let i = 0; i < lines.length; i++) {
+        if (/^(```|~~~)/.test(lines[i].trim())) {
+            inFence = !inFence;
+            continue;
         }
-        return line;
-    });
-    return out;
+        if (inFence) continue;
+
+        let line = lines[i];
+        // Fix unmatched bold markers at line level
+        if (/^\*\*[^*]+$/.test(line) && !line.endsWith('**')) {
+            line = line + '**';
+        } else if (/^[^*]+\*\*$/.test(line) && !line.startsWith('**')) {
+            line = '**' + line;
+        }
+        // Fix solo backticks (odd count of backticks on the line) — but only when
+        // the line clearly *starts* a code span (has a backtick followed by word-chars)
+        // to avoid mutating prose that contains a lone backtick.
+        const backtickCount = (line.match(/`/g) || []).length;
+        if (backtickCount > 0 && backtickCount % 2 !== 0 && /`\S/.test(line)) {
+            line = line + '`';
+        }
+        lines[i] = line;
+    }
+    return lines.join('\n');
 }
 
 // Fix heading spacing and format

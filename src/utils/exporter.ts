@@ -97,10 +97,13 @@ export function exportAsLaTeX(content: string, filename: string = 'document'): v
 
 /**
  * Export tables as CSV (.csv)
+ * @throws Error if the document contains no markdown tables to export.
  */
 export function exportAsCSV(content: string, filename: string = 'data'): void {
     const csv = generateCSV(content);
-    if (!csv) return;
+    if (!csv) {
+        throw new Error('No tables found in document — nothing to export as CSV.');
+    }
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     saveAs(blob, filename.endsWith('.csv') ? filename : `${filename}.csv`);
 }
@@ -141,10 +144,13 @@ export function exportAsRTF(content: string, filename: string = 'document'): voi
 
 /**
  * Export as Excel (.xlsx) preserving document narrative and table structures
+ * @throws Error if the document has no parsable content.
  */
 export function exportAsXLSX(content: string, filename: string = 'data'): void {
     const tableData = parseMarkdownToTableData(content);
-    if (tableData.length === 0) return;
+    if (tableData.length === 0) {
+        throw new Error('No content found to export as XLSX.');
+    }
 
     const ws = XLSX.utils.aoa_to_sheet(tableData);
     const wb = XLSX.utils.book_new();
@@ -159,7 +165,9 @@ export function exportAsXLSX(content: string, filename: string = 'data'): void {
  */
 export async function exportAsImage(elementId: string, filename: string = 'preview'): Promise<void> {
     const original = document.getElementById(elementId);
-    if (!original) return;
+    if (!original) {
+        throw new Error(`Preview element #${elementId} not found — cannot export as image.`);
+    }
 
     // Create a clone and prepend to body (behind shield)
     const clone = original.cloneNode(true) as HTMLElement;

@@ -186,8 +186,13 @@ function App() {
 
   const handleExportCSV = () => {
     if (!input.trim()) return;
-    exportAsCSV(input, 'data');
-    showExportSuccess('.csv');
+    try {
+      exportAsCSV(input, 'data');
+      showExportSuccess('.csv');
+    } catch (err: any) {
+      setExportMessage(`❌ ${err?.message || 'CSV export failed'}`);
+      setTimeout(() => setExportMessage(''), 3000);
+    }
   };
 
   const handleExportJSON = () => {
@@ -210,13 +215,23 @@ function App() {
 
   const handleExportXLSX = () => {
     if (!input.trim()) return;
-    exportAsXLSX(input, 'data');
-    showExportSuccess('.xlsx');
+    try {
+      exportAsXLSX(input, 'data');
+      showExportSuccess('.xlsx');
+    } catch (err: any) {
+      setExportMessage(`❌ ${err?.message || 'XLSX export failed'}`);
+      setTimeout(() => setExportMessage(''), 3000);
+    }
   };
 
   const handleExportImage = async () => {
-    const previewEl = document.querySelector('.markdown-preview');
-    if (!previewEl) return;
+    // The preview element has id="preview-content"; check for that directly so the
+    // guard matches the element we actually pass to exportAsImage.
+    if (!document.getElementById('preview-content')) {
+      setExportMessage('❌ Preview not ready — nothing to export.');
+      setTimeout(() => setExportMessage(''), 3000);
+      return;
+    }
     setIsExporting(true);
     try {
       await exportAsImage('preview-content', 'formatted-preview');

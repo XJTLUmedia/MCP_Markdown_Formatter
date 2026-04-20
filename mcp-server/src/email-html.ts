@@ -38,13 +38,14 @@ export async function markdownToEmailHtml(md: string): Promise<string> {
     }
 
     // First convert to basic HTML
+    // Cast plugins to `any` to work around unified's strict plugin generic types
+    // (remark-rehype's output type and rehype-stringify's input type don't align in the
+    // current @types versions; the runtime chain is correct).
     const htmlFile = await unified()
         .use(remarkParse)
         .use(remarkGfm)
-        // @ts-ignore
-        .use(remarkRehype)
-        // @ts-ignore
-        .use(rehypeStringify)
+        .use(remarkRehype as any)
+        .use(rehypeStringify as any)
         .process(processed);
 
     let html = String(htmlFile);

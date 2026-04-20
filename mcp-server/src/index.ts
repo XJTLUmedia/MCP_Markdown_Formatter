@@ -1291,11 +1291,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             throw new Error("Markdown content is required");
         }
 
-        // Guard against oversized inputs to prevent runaway memory/CPU usage
-        const MAX_INPUT_BYTES = 1024 * 1024 * 1024 ; // 1 GB
+        // Guard against oversized inputs to prevent runaway memory/CPU usage.
+        // 10 MB is plenty for book-length Markdown; increase here if you hit a
+        // legitimate limit for your use case.
+        const MAX_INPUT_BYTES = 10 * 1024 * 1024;
         const inputToCheck = markdown ?? (args as any).html ?? '';
         if (Buffer.byteLength(inputToCheck, 'utf8') > MAX_INPUT_BYTES) {
-            throw new Error('Input too large: content exceeds the 1 GB limit. Please split the document into smaller sections.');
+            throw new Error(`Input too large: content exceeds the ${Math.round(MAX_INPUT_BYTES / (1024 * 1024))} MB limit. Please split the document into smaller sections.`);
         }
 
         if (name === "harmonize_markdown") {
@@ -1615,12 +1617,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
             // Pre-launch browser if any PDF conversions are needed
             let browser: any = null;
+            let browserLaunchError: string | null = null;
             const needsBrowser = formats.includes('pdf');
             if (needsBrowser) {
                 try {
                     browser = await puppeteer.launch({ headless: true, executablePath: await findChrome() });
                 } catch (err: any) {
-                    // If browser fails to launch, PDF conversions will all fail individually
+                    // Capture the root cause so per-item PDF failures surface a helpful message
+                    browserLaunchError = err?.message || String(err);
                 }
             }
 
@@ -1705,7 +1709,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                                 }
                                 case 'pdf': {
                                     if (!browser) {
-                                        throw new Error('Browser launch failed — cannot generate PDF. Ensure Chrome/Chromium is installed.');
+                                        throw new Error(
+                                            browserLaunchError
+                                                ? `Browser launch failed — cannot generate PDF. Cause: ${browserLaunchError}`
+                                                : 'Browser launch failed — cannot generate PDF. Ensure Chrome/Chromium is installed.'
+                                        );
                                     }
                                     const htmlProcessor = unified()
                                         .use(remarkParse).use(remarkGfm)

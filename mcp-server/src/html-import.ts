@@ -12,9 +12,12 @@ export function htmlToMarkdown(html: string): string {
     md = md.replace(/<body[^>]*>/gi, '');
     md = md.replace(/<\/body>/gi, '');
 
-    // Remove scripts and styles
+    // Remove scripts, styles, and HTML comments (they can contain angle brackets that confuse downstream regexes)
     md = md.replace(/<script[\s\S]*?<\/script>/gi, '');
     md = md.replace(/<style[\s\S]*?<\/style>/gi, '');
+    md = md.replace(/<!--[\s\S]*?-->/g, '');
+    // Also drop self-closing metadata tags so their attributes don't leak through
+    md = md.replace(/<(?:meta|link|base)\b[^>]*\/?>/gi, '');
 
     // Convert block elements first (order matters)
 

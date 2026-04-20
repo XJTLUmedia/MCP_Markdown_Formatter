@@ -159,8 +159,17 @@ export function extractTocEntries(md: string, maxDepth: number = 6): TocEntry[] 
             const level = headingMatch[1].length;
             if (level > maxDepth) continue;
             const text = headingMatch[2].replace(/\s*#+\s*$/, '').trim();
-            let slug = text.toLowerCase()
-                .replace(/[^\w\s-]/g, '')
+            // GitHub-style slug: lowercase, strip inline markdown, preserve unicode letters/digits,
+            // replace whitespace with hyphens, drop punctuation except `-` and `_`.
+            const plainHeading = text
+                .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')      // images -> alt
+                .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')        // links -> text
+                .replace(/`([^`]+)`/g, '$1')                    // inline code
+                .replace(/\*\*([^*]+)\*\*/g, '$1')              // bold
+                .replace(/\*([^*]+)\*/g, '$1')                  // italic
+                .replace(/_([^_]+)_/g, '$1');                   // italic (underscore)
+            let slug = plainHeading.toLowerCase()
+                .replace(/[^\p{L}\p{N}\s_-]/gu, '')              // keep unicode letters/digits, space, - and _
                 .replace(/\s+/g, '-')
                 .replace(/-+/g, '-')
                 .replace(/^-|-$/g, '');

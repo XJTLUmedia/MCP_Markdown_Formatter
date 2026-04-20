@@ -20,11 +20,13 @@ import * as XLSX from 'xlsx';
  * Export table content only as CSV string
  */
 export function generateCSV(content: string): string {
-    const tableLines = content.match(/\|.*\|/g);
+    // Strip fenced code blocks first so pipes inside code don't get treated as table rows
+    const stripped = content.replace(/```[\s\S]*?```/g, '').replace(/~~~[\s\S]*?~~~/g, '');
+    const tableLines = stripped.match(/^\s*\|.*\|\s*$/gm);
     if (!tableLines) return "";
     let csv = "";
     tableLines.forEach(line => {
-        if (line.includes('---')) return;
+        if (/^\s*\|?[\s\-:|]+\|?\s*$/.test(line)) return; // separator row
         const cells = line.split('|').map(c => c.trim()).filter(c => c !== "").map(c => stripMarkdown(c));
         if (cells.length > 0) csv += cells.map(c => `"${c.replace(/"/g, '""')}"`).join(',') + "\n";
     });
@@ -113,12 +115,13 @@ export function stripMarkdown(text: string): string {
     clean = clean.replace(/^#{1,6}\s+/gm, '');
 
     // 5. Inline: Multi-pass Emphasis (Bold, Italic, Strikethrough, Highlight)
+    // Require non-space adjacent to delimiters to avoid stripping literal asterisks in prose (e.g. `4*` or `*args`).
     for (let i = 0; i < 3; i++) {
-        clean = clean.replace(/[*_]{3}([^*_]+)[*_]{3}/g, '$1');
-        clean = clean.replace(/[*_]{2}([^*_]+)[*_]{2}/g, '$1');
-        clean = clean.replace(/[*_]{1}([^*_]+)[*_]{1}/g, '$1');
-        clean = clean.replace(/~~([^~]+)~~/g, '$1');
-        clean = clean.replace(/==([^=]+)==/g, '$1');
+        clean = clean.replace(/(?<![*_\w])[*_]{3}(\S[^*_\n]*?\S|\S)[*_]{3}(?![*_\w])/g, '$1');
+        clean = clean.replace(/(?<![*_\w])[*_]{2}(\S[^*_\n]*?\S|\S)[*_]{2}(?![*_\w])/g, '$1');
+        clean = clean.replace(/(?<![*_\w])[*_](\S[^*_\n]*?\S|\S)[*_](?![*_\w])/g, '$1');
+        clean = clean.replace(/~~(\S[^~\n]*?\S|\S)~~/g, '$1');
+        clean = clean.replace(/==(\S[^=\n]*?\S|\S)==/g, '$1');
     }
 
     // 5b. Block Level: Footnote definitions
@@ -572,8 +575,8 @@ export function parseMarkdownToDocx(content: string): DocxParseResult {
             continue;
         }
         if (!trimmed) { elements.push(new Paragraph({ spacing: { after: 100 } })); i++; continue; }
-        // Skip blank lines from footnote def removal
-        if (/^\[\^[^\]]+\]:\s+/.test(trimmed)) { i++; continue; }
+        // Note: footnote definitions were already stripped by collectFootnoteDefinitions upstream,
+        // so we don't need a guard here.
         if (trimmed.startsWith('# ')) {
             elements.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: parseInlineFormatting(trimmed.slice(2), footnoteIdMap), spacing: { before: 400, after: 200 } }));
         } else if (trimmed.startsWith('## ')) {
